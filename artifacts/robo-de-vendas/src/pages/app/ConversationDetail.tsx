@@ -27,41 +27,41 @@ export default function ConversationDetail({ id }: Props) {
     setSending(false);
   };
 
-  if (loading) return <div style={{ color: "#8b98b4", padding: 40 }}>Carregando conversa...</div>;
+  if (loading) return <div style={{ color: "#9992b8", padding: 40 }}>Carregando conversa...</div>;
   if (!data) return <div style={{ color: "#f87171", padding: 40 }}>Conversa não encontrada</div>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 64px)" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexShrink: 0 }}>
-        <button onClick={() => navigate("/app/conversations")} style={{ background: "transparent", border: "none", color: "#8b98b4", fontSize: 22, cursor: "pointer" }}>←</button>
+        <button onClick={() => navigate("/app/conversations")} style={{ background: "transparent", border: "none", color: "#9992b8", fontSize: 22, cursor: "pointer" }}>←</button>
         <div style={{
           width: 44, height: 44, borderRadius: "50%",
-          background: "rgba(37,211,102,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
+          background: "rgba(139,92,246,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
         }}>👤</div>
         <div>
           <div style={{ fontSize: 17, fontWeight: 800 }}>{data.contactName || data.contactPhone}</div>
-          <div style={{ fontSize: 12, color: "#8b98b4" }}>+{data.contactPhone}</div>
+          <div style={{ fontSize: 12, color: "#9992b8" }}>+{data.contactPhone}</div>
         </div>
       </div>
 
       {/* Messages */}
       <div style={{
-        flex: 1, overflow: "auto", background: "#0d1117", borderRadius: 16,
-        border: "1px solid rgba(255,255,255,0.08)", padding: 24, display: "flex", flexDirection: "column", gap: 12,
+        flex: 1, overflow: "auto", background: "#080810", borderRadius: 16,
+        border: "1px solid rgba(139,92,246,0.10)", padding: 24, display: "flex", flexDirection: "column", gap: 12,
       }}>
         {data.messages.length === 0 && (
-          <div style={{ textAlign: "center", color: "#8b98b4", fontSize: 14, marginTop: "auto" }}>Nenhuma mensagem ainda</div>
+          <div style={{ textAlign: "center", color: "#9992b8", fontSize: 14, marginTop: "auto" }}>Nenhuma mensagem ainda</div>
         )}
         {data.messages.map(m => (
           <div key={m.id} style={{ display: "flex", justifyContent: m.role === "assistant" ? "flex-end" : "flex-start" }}>
             <div style={{
               maxWidth: "70%", padding: "10px 16px", borderRadius: m.role === "assistant" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-              background: m.role === "assistant" ? "rgba(37,211,102,0.15)" : "rgba(255,255,255,0.06)",
-              border: `1px solid ${m.role === "assistant" ? "rgba(37,211,102,0.2)" : "rgba(255,255,255,0.08)"}`,
+              background: m.role === "assistant" ? "rgba(139,92,246,0.15)" : "rgba(139,92,246,0.08)",
+              border: `1px solid ${m.role === "assistant" ? "rgba(139,92,246,0.2)" : "rgba(139,92,246,0.10)"}`,
             }}>
-              <p style={{ fontSize: 14, lineHeight: 1.6, margin: 0, color: "#f0f4ff" }}>{m.content}</p>
-              <p style={{ fontSize: 11, color: "#8b98b4", margin: "4px 0 0", textAlign: m.role === "assistant" ? "right" : "left" }}>
+              <p style={{ fontSize: 14, lineHeight: 1.6, margin: 0, color: "#ffffff" }}>{m.content}</p>
+              <p style={{ fontSize: 11, color: "#9992b8", margin: "4px 0 0", textAlign: m.role === "assistant" ? "right" : "left" }}>
                 {m.role === "assistant" ? "🤖 Agente" : "👤 Cliente"} · {new Date(m.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
@@ -76,13 +76,13 @@ export default function ConversationDetail({ id }: Props) {
           value={reply} onChange={e => setReply(e.target.value)}
           placeholder="Enviar mensagem manual como agente..."
           style={{
-            flex: 1, padding: "12px 16px", background: "#0d1117",
-            border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12,
-            color: "#f0f4ff", fontSize: 14, outline: "none",
+            flex: 1, padding: "12px 16px", background: "#080810",
+            border: "1px solid rgba(139,92,246,0.12)", borderRadius: 12,
+            color: "#ffffff", fontSize: 14, outline: "none",
           }}
         />
         <button type="submit" disabled={sending || !reply.trim()} style={{
-          padding: "12px 24px", background: "linear-gradient(135deg, #25d366, #16a34a)",
+          padding: "12px 24px", background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
           border: "none", borderRadius: 12, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
         }}>
           {sending ? "..." : "Enviar"}

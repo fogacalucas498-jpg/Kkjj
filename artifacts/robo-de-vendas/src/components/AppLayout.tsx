@@ -17,19 +17,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#07090f", color: "#f0f4ff", fontFamily: "'Manrope', sans-serif" }}>
+    <div style={{ display: "flex", height: "100vh", background: "#000000", color: "#ffffff", fontFamily: "'Manrope', sans-serif" }}>
       {/* Sidebar */}
       <aside style={{
-        width: 240, flexShrink: 0, background: "#0d1117", borderRight: "1px solid rgba(255,255,255,0.08)",
+        width: 240, flexShrink: 0, background: "#080810", borderRight: "1px solid rgba(139,92,246,0.10)",
         display: "flex", flexDirection: "column", padding: "24px 0",
       }}>
-        <div style={{ padding: "0 20px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ padding: "0 20px 24px", borderBottom: "1px solid rgba(139,92,246,0.10)" }}>
           <Link href="/">
             <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
               <img src={`${BASE}images/logo.jpg`} alt="logo" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
               <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#25d366" }}>Robô de Vendas</div>
-                <div style={{ fontSize: 11, color: "#8b98b4" }}>Networking VIP</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#8b5cf6" }}>Robô de Vendas</div>
+                <div style={{ fontSize: 11, color: "#9992b8" }}>Networking VIP</div>
               </div>
             </div>
           </Link>
@@ -42,9 +42,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
                 borderRadius: 8, marginBottom: 4, cursor: "pointer",
                 background: location === item.href || (item.href !== "/app" && location.startsWith(item.href))
-                  ? "rgba(37,211,102,0.12)" : "transparent",
+                  ? "rgba(139,92,246,0.12)" : "transparent",
                 color: location === item.href || (item.href !== "/app" && location.startsWith(item.href))
-                  ? "#25d366" : "#8b98b4",
+                  ? "#8b5cf6" : "#9992b8",
                 fontWeight: 600, fontSize: 14,
                 transition: "all 0.15s",
               }}>
@@ -55,12 +55,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, color: "#f0f4ff" }}>{user?.name}</div>
-          <div style={{ fontSize: 12, color: "#8b98b4", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis" }}>{user?.email}</div>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid rgba(139,92,246,0.10)" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, color: "#ffffff" }}>{user?.name}</div>
+          <div style={{ fontSize: 12, color: "#9992b8", marginBottom: 12, overflow: "hidden", textOverflow: "ellipsis" }}>{user?.email}</div>
           <button onClick={logout} style={{
             width: "100%", padding: "8px", borderRadius: 6, background: "transparent",
-            border: "1px solid rgba(255,255,255,0.1)", color: "#8b98b4", fontSize: 13,
+            border: "1px solid rgba(139,92,246,0.12)", color: "#9992b8", fontSize: 13,
             fontWeight: 600, cursor: "pointer",
           }}>Sair</button>
         </div>

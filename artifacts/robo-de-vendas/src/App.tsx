@@ -49,7 +49,7 @@ function LandingPage() {
 function ProtectedApp({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#07090f", color: "#25d366", fontFamily: "'Manrope', sans-serif", fontSize: 18 }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#000000", color: "#8b5cf6", fontFamily: "'Manrope', sans-serif", fontSize: 18 }}>
       Carregando...
     </div>
   );

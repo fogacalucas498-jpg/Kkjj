@@ -17,7 +17,7 @@ export default function Navbar() {
             <img
               src={`${import.meta.env.BASE_URL}images/logo.jpg`}
               alt="Robô de Vendas - Networking VIP"
-              style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(37,211,102,0.5)", flexShrink: 0 }}
+              style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(139,92,246,0.5)", flexShrink: 0 }}
             />
             <span className="logo-text">Robô de Vendas<br/>Networking VIP</span>
           </a>
