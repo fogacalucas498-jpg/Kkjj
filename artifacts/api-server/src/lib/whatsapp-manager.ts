@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
-import { db, whatsappSessionsTable, conversationsTable, messagesTable, agentsTable, knowledgeTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, whatsappSessionsTable, conversationsTable, messagesTable, agentsTable, knowledgeTable, usersTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 
 interface SessionState {
@@ -8,7 +8,6 @@ interface SessionState {
   qr?: string;
   phoneNumber?: string;
   sock?: any;
-  cleanup?: () => void;
 }
 
 class WhatsAppManager extends EventEmitter {
@@ -18,15 +17,28 @@ class WhatsAppManager extends EventEmitter {
     return this.sessions.get(agentId);
   }
 
+  async reconnectPersisted() {
+    try {
+      const connected = await db.select({ agentId: whatsappSessionsTable.agentId })
+        .from(whatsappSessionsTable)
+        .where(eq(whatsappSessionsTable.status, "connected"));
+      for (const { agentId } of connected) {
+        logger.info({ agentId }, "Auto-reconnecting persisted WhatsApp session");
+        this.connect(agentId).catch(() => {});
+      }
+    } catch (err) {
+      logger.error({ err }, "Failed to reconnect persisted sessions");
+    }
+  }
+
   async connect(agentId: number) {
-    if (this.sessions.get(agentId)?.status === "connected") return;
+    const existing = this.sessions.get(agentId);
+    if (existing?.status === "connected" || existing?.status === "connecting" || existing?.status === "qr") return;
 
     this.sessions.set(agentId, { status: "connecting" });
-    this.emit("state", agentId, { status: "connecting" });
 
     try {
       const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = await import("@whiskeysockets/baileys") as any;
-      const { Boom } = await import("@hapi/boom") as any;
 
       const authDir = `/tmp/wa-session-${agentId}`;
       const { state, saveCreds } = await useMultiFileAuthState(authDir);
@@ -49,22 +61,25 @@ class WhatsAppManager extends EventEmitter {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-          const QRCode = (await import("qrcode")).default;
-          const qrDataURL = await QRCode.toDataURL(qr);
-          sessionState.status = "qr";
-          sessionState.qr = qrDataURL;
-          this.sessions.set(agentId, sessionState);
-          this.emit("state", agentId, { status: "qr", qr: qrDataURL });
-          await db.update(whatsappSessionsTable).set({ status: "qr", qrCode: qrDataURL, updatedAt: new Date() })
-            .where(eq(whatsappSessionsTable.agentId, agentId));
+          try {
+            const QRCode = (await import("qrcode")).default;
+            const qrDataURL = await QRCode.toDataURL(qr);
+            sessionState.status = "qr";
+            sessionState.qr = qrDataURL;
+            this.sessions.set(agentId, { ...sessionState });
+            await db.update(whatsappSessionsTable).set({ status: "qr", qrCode: qrDataURL, updatedAt: new Date() })
+              .where(eq(whatsappSessionsTable.agentId, agentId));
+          } catch (err) {
+            logger.error({ err }, "QR generation error");
+          }
         }
 
         if (connection === "close") {
-          const shouldReconnect = (lastDisconnect?.error as any)?.output?.statusCode !== DisconnectReason.loggedOut;
+          const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+          const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== DisconnectReason.forbidden;
           sessionState.status = "disconnected";
           sessionState.qr = undefined;
-          this.sessions.set(agentId, sessionState);
-          this.emit("state", agentId, { status: "disconnected" });
+          this.sessions.set(agentId, { ...sessionState });
           await db.update(whatsappSessionsTable).set({ status: "disconnected", qrCode: null, updatedAt: new Date() })
             .where(eq(whatsappSessionsTable.agentId, agentId));
           if (shouldReconnect) {
@@ -77,8 +92,7 @@ class WhatsAppManager extends EventEmitter {
           sessionState.status = "connected";
           sessionState.phoneNumber = phone;
           sessionState.qr = undefined;
-          this.sessions.set(agentId, sessionState);
-          this.emit("state", agentId, { status: "connected", phoneNumber: phone });
+          this.sessions.set(agentId, { ...sessionState });
           await db.update(whatsappSessionsTable).set({ status: "connected", qrCode: null, phoneNumber: phone, updatedAt: new Date() })
             .where(eq(whatsappSessionsTable.agentId, agentId));
         }
@@ -89,10 +103,12 @@ class WhatsAppManager extends EventEmitter {
           if (msg.key.fromMe || !msg.message) continue;
           const text = msg.message.conversation
             || msg.message.extendedTextMessage?.text
+            || msg.message.imageMessage?.caption
             || "";
-          if (!text) continue;
+          if (!text.trim()) continue;
 
           const contactPhone = msg.key.remoteJid?.replace("@s.whatsapp.net", "") ?? "";
+          if (!contactPhone) continue;
           const contactName = msg.pushName ?? contactPhone;
 
           const [session] = await db.select().from(whatsappSessionsTable)
@@ -100,7 +116,10 @@ class WhatsAppManager extends EventEmitter {
           if (!session) continue;
 
           let [conv] = await db.select().from(conversationsTable)
-            .where(eq(conversationsTable.contactPhone, contactPhone)).limit(1);
+            .where(and(
+              eq(conversationsTable.contactPhone, contactPhone),
+              eq(conversationsTable.sessionId, session.id)
+            )).limit(1);
 
           if (!conv) {
             [conv] = await db.insert(conversationsTable).values({
@@ -112,8 +131,6 @@ class WhatsAppManager extends EventEmitter {
           }
 
           await db.insert(messagesTable).values({ conversationId: conv!.id, content: text, role: "user" });
-
-          this.emit("message", agentId, { convId: conv!.id, contactPhone, contactName, text });
 
           const aiReply = await this.generateReply(agentId, conv!.id, text);
           if (aiReply) {
@@ -128,7 +145,8 @@ class WhatsAppManager extends EventEmitter {
     } catch (err) {
       logger.error({ err }, "WhatsApp connect error");
       this.sessions.set(agentId, { status: "disconnected" });
-      this.emit("state", agentId, { status: "disconnected" });
+      await db.update(whatsappSessionsTable).set({ status: "disconnected", qrCode: null, updatedAt: new Date() })
+        .where(eq(whatsappSessionsTable.agentId, agentId)).catch(() => {});
     }
   }
 
@@ -136,9 +154,9 @@ class WhatsAppManager extends EventEmitter {
     const state = this.sessions.get(agentId);
     if (state?.sock) {
       try { await state.sock.logout(); } catch {}
+      try { state.sock.end(); } catch {}
     }
     this.sessions.set(agentId, { status: "disconnected" });
-    this.emit("state", agentId, { status: "disconnected" });
     await db.update(whatsappSessionsTable).set({ status: "disconnected", qrCode: null, updatedAt: new Date() })
       .where(eq(whatsappSessionsTable.agentId, agentId));
   }
@@ -148,6 +166,11 @@ class WhatsAppManager extends EventEmitter {
       const [agent] = await db.select().from(agentsTable).where(eq(agentsTable.id, agentId)).limit(1);
       if (!agent) return null;
 
+      const [userRow] = await db.select({ openaiApiKey: usersTable.openaiApiKey })
+        .from(usersTable).where(eq(usersTable.id, agent.userId)).limit(1);
+      const apiKey = userRow?.openaiApiKey || process.env["OPENAI_API_KEY"];
+      if (!apiKey) return null;
+
       const knowledge = await db.select().from(knowledgeTable).where(eq(knowledgeTable.agentId, agentId));
       const knowledgeText = knowledge.map(k => `### ${k.title}\n${k.content}`).join("\n\n");
 
@@ -155,14 +178,11 @@ class WhatsAppManager extends EventEmitter {
         .where(eq(messagesTable.conversationId, convId));
       const last10 = history.slice(-10);
 
-      const apiKey = process.env["OPENAI_API_KEY"];
-      if (!apiKey) return null;
-
       const { default: OpenAI } = await import("openai");
       const client = new OpenAI({ apiKey });
 
       const systemPrompt = [
-        agent.instructions || `Você é ${agent.name}, um assistente virtual inteligente.`,
+        agent.instructions || `Você é ${agent.name}, um assistente virtual inteligente. Responda sempre em português, de forma clara e educada.`,
         knowledgeText ? `\n\n## Base de Conhecimento\n${knowledgeText}` : ""
       ].join("");
 
@@ -178,7 +198,7 @@ class WhatsAppManager extends EventEmitter {
         max_tokens: 500,
       });
 
-      return completion.choices[0]?.message?.content ?? null;
+      return completion.choices[0]?.message?.content?.trim() ?? null;
     } catch (err) {
       logger.error({ err }, "AI reply error");
       return null;

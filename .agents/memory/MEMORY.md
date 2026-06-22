@@ -1,0 +1,2 @@
+- [Baileys build approval](baileys-build.md) — @whiskeysockets/baileys and protobufjs require onlyBuiltDependencies in pnpm-workspace.yaml to run their postinstall scripts.
+- [OpenAI key per user](openai-key-per-user.md) — openaiApiKey stored in users table, served via PUT /auth/profile and GET /auth/settings; whatsapp-manager reads from DB falling back to process.env.

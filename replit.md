@@ -1,45 +1,69 @@
-# [Project name]
+# Robô de Vendas - Networking VIP
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Plataforma SaaS de agentes de I.A para WhatsApp. Usuários criam agentes, adicionam base de conhecimento, conectam um número de WhatsApp via QR Code e o agente responde automaticamente às mensagens usando OpenAI.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/api-server run dev` — API server (port 8080, served at /api)
+- `pnpm --filter @workspace/robo-de-vendas run dev` — frontend React/Vite
+- `pnpm run typecheck` — typecheck completo
+- `pnpm run typecheck:libs` — rebuild declarações das libs (necessário após mudar schema)
+- `pnpm --filter @workspace/db run push` — aplicar mudanças de schema no banco (dev only)
+- `pnpm --filter @workspace/api-server run typecheck` — verificar erros no backend
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Frontend: React 19 + Vite + Tailwind (sem framework CSS, tudo inline styles)
+- API: Express 5 + pino (logger)
+- DB: PostgreSQL + Drizzle ORM (`lib/db`)
+- Auth: JWT (SESSION_SECRET), 30 dias de validade
+- WhatsApp: `@whiskeysockets/baileys` (multi-device)
+- AI: OpenAI GPT-4o-mini
+- Validação: Zod (zod/v4)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/robo-de-vendas/` — frontend React + landing page + app
+- `artifacts/api-server/` — Express backend
+- `lib/db/src/schema/` — schema Drizzle (fonte da verdade do banco)
+- `artifacts/api-server/src/lib/whatsapp-manager.ts` — gestão de sessões Baileys
+- `artifacts/api-server/src/routes/` — rotas da API
+- `artifacts/robo-de-vendas/src/lib/api.ts` — cliente axios com todos os métodos da API
+- `artifacts/robo-de-vendas/src/contexts/auth.tsx` — contexto de autenticação
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- JWT armazenado em localStorage (simples, sem cookies httpOnly por ser MVP)
+- Sessões Baileys em `/tmp/wa-session-{agentId}` (perdidas no restart, mas reconecta automaticamente via `reconnectPersisted()`)
+- Chave OpenAI salva por usuário na coluna `openai_api_key` da tabela `users` — frontend usa `PUT /auth/profile`, backend lê do DB com fallback para `process.env.OPENAI_API_KEY`
+- Inline styles em todos componentes do app (sem Tailwind no JSX do app, apenas na landing)
+- Cascade delete: agent → knowledge, whatsapp_sessions → conversations → messages (FK com onDelete cascade)
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Landing page** (`/`) — marketing com preços todos GRÁTIS
+- **Auth** (`/login`, `/register`) — cadastro/login com JWT
+- **Dashboard** (`/app`) — visão geral dos agentes e conversas
+- **Agentes** (`/app/agents`, `/app/agents/:id`) — CRUD de agentes, base de conhecimento, conexão WhatsApp
+- **Conversas** (`/app/conversations`, `/app/conversations/:id`) — histórico e envio manual de mensagens
+- **Configurações** (`/app/settings`) — chave OpenAI por usuário, info da conta
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Paleta de cores: preto (#000000), branco (#ffffff) e roxo (#8b5cf6 / #7c3aed)
+- CSS variables em `--accent: #8b5cf6` e `--bg: #000000`
+- Idioma: português brasileiro em tudo
+- Tudo gratuito (sem planos pagos)
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Baileys e protobufjs precisam estar em `onlyBuiltDependencies` no `pnpm-workspace.yaml` — sem isso o servidor não inicia
+- Após mudar `lib/db/src/schema/`, rodar `pnpm run typecheck:libs` antes de `pnpm --filter @workspace/api-server run typecheck`
+- Rotas do Express montadas em `/api` — o frontend usa `BASE_URL + "api"` como base
+- Sessões WhatsApp ficam em memória: reiniciar o servidor reconecta as sessões com status "connected" no banco automaticamente
+- `@types/qrcode` deve estar em devDependencies do `api-server`
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- Ver `pnpm-workspace` skill para estrutura do workspace, TypeScript e referências de pacotes

@@ -17,7 +17,8 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      window.location.href = BASE + "login";
+      const loginPath = BASE.endsWith("/") ? `${BASE}login` : `${BASE}/login`;
+      window.location.href = loginPath;
     }
     return Promise.reject(err);
   }
@@ -43,6 +44,10 @@ export const authApi = {
   login: (data: { email: string; password: string }) =>
     api.post<{ token: string; user: User }>("/auth/login", data).then(r => r.data),
   me: () => api.get<User>("/auth/me").then(r => r.data),
+  updateProfile: (data: { name?: string; openaiApiKey?: string }) =>
+    api.put<User>("/auth/profile", data).then(r => r.data),
+  getSettings: () =>
+    api.get<{ hasOpenaiKey: boolean }>("/auth/settings").then(r => r.data),
 };
 
 export const agentsApi = {
