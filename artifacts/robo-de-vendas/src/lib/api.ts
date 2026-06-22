@@ -44,10 +44,12 @@ export const authApi = {
   login: (data: { email: string; password: string }) =>
     api.post<{ token: string; user: User }>("/auth/login", data).then(r => r.data),
   me: () => api.get<User>("/auth/me").then(r => r.data),
-  updateProfile: (data: { name?: string; openaiApiKey?: string }) =>
+  updateProfile: (data: { name?: string; email?: string; currentPassword?: string; openaiApiKey?: string }) =>
     api.put<User>("/auth/profile", data).then(r => r.data),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    api.put<{ ok: boolean; message: string }>("/auth/password", data).then(r => r.data),
   getSettings: () =>
-    api.get<{ hasOpenaiKey: boolean }>("/auth/settings").then(r => r.data),
+    api.get<{ hasOpenaiKey: boolean; memberSince: string }>("/auth/settings").then(r => r.data),
 };
 
 export const agentsApi = {

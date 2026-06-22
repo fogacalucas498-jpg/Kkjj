@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation, Redirect } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./contexts/auth";
 import AppLayout from "./components/AppLayout";
@@ -24,8 +24,13 @@ import AgentDetail from "./pages/app/AgentDetail";
 import Conversations from "./pages/app/Conversations";
 import ConversationDetail from "./pages/app/ConversationDetail";
 import Settings from "./pages/app/Settings";
+import Profile from "./pages/app/Profile";
 
-const qc = new QueryClient();
+const qc = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 1, staleTime: 30_000 },
+  },
+});
 
 function LandingPage() {
   return (
@@ -49,8 +54,12 @@ function LandingPage() {
 function ProtectedApp({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#000000", color: "#8b5cf6", fontFamily: "'Manrope', sans-serif", fontSize: 18 }}>
-      Carregando...
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: "#000000", fontFamily: "'Manrope', sans-serif", flexDirection: "column", gap: 16,
+    }}>
+      <div style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid rgba(139,92,246,0.2)", borderTopColor: "#8b5cf6", animation: "spin 0.8s linear infinite" }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
   if (!user) return <Redirect to="/login" />;
@@ -68,6 +77,9 @@ export default function App() {
 
           <Route path="/app">
             <ProtectedApp><Dashboard /></ProtectedApp>
+          </Route>
+          <Route path="/app/profile">
+            <ProtectedApp><Profile /></ProtectedApp>
           </Route>
           <Route path="/app/agents">
             <ProtectedApp><Agents /></ProtectedApp>

@@ -7,6 +7,7 @@ interface AuthCtx {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  updateUser: (partial: Partial<User>) => void;
 }
 
 const Ctx = createContext<AuthCtx>({} as AuthCtx);
@@ -20,7 +21,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) { setLoading(false); return; }
-    authApi.me().then(u => { setUser(u); setLoading(false); }).catch(() => {
+    authApi.me().then(u => {
+      setUser(u);
+      localStorage.setItem("user", JSON.stringify(u));
+      setLoading(false);
+    }).catch(() => {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       setLoading(false);
@@ -45,9 +50,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
+    window.location.href = import.meta.env.BASE_URL + "login";
   };
 
-  return <Ctx.Provider value={{ user, loading, login, register, logout }}>{children}</Ctx.Provider>;
+  const updateUser = (partial: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...partial };
+      localStorage.setItem("user", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  return <Ctx.Provider value={{ user, loading, login, register, logout, updateUser }}>{children}</Ctx.Provider>;
 }
 
 export const useAuth = () => useContext(Ctx);
