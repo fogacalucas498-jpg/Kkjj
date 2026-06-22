@@ -14,11 +14,11 @@ export default function Navbar() {
       <div className="container">
         <div className="navbar-inner">
           <a href="#" className="navbar-logo">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-              <rect width="32" height="32" rx="8" fill="#25d366"/>
-              <path d="M16 6C10.477 6 6 10.477 6 16c0 1.77.466 3.432 1.28 4.872L6 26l5.302-1.256A9.96 9.96 0 0016 26c5.523 0 10-4.477 10-10S21.523 6 16 6z" fill="white"/>
-              <path d="M13 13.5c0-.276.224-.5.5-.5h5c.276 0 .5.224.5.5s-.224.5-.5.5h-5a.5.5 0 01-.5-.5zM13 16c0-.276.224-.5.5-.5h5c.276 0 .5.224.5.5s-.224.5-.5.5h-5a.5.5 0 01-.5-.5zM13 18.5c0-.276.224-.5.5-.5h3c.276 0 .5.224.5.5s-.224.5-.5.5h-3a.5.5 0 01-.5-.5z" fill="#25d366"/>
-            </svg>
+            <img
+              src={`${import.meta.env.BASE_URL}images/logo.jpg`}
+              alt="Robô de Vendas - Networking VIP"
+              style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(37,211,102,0.5)", flexShrink: 0 }}
+            />
             <span className="logo-text">Robô de Vendas<br/>Networking VIP</span>
           </a>
 
