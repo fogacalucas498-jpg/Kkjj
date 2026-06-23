@@ -79,3 +79,17 @@ export const conversationsApi = {
   sendMessage: (id: number, content: string) =>
     api.post<Message>(`/conversations/${id}/messages`, { content }).then(r => r.data),
 };
+
+export interface Stats {
+  totalAgents: number;
+  connectedAgents: number;
+  totalConversations: number;
+  totalMessages: number;
+  todayMessages: number;
+  messagesPerDay: { day: string; count: number }[];
+  avgResponseSecs: number | null;
+}
+
+export const statsApi = {
+  get: () => api.get<Stats>("/stats").then(r => r.data),
+};

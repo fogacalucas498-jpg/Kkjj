@@ -1,3 +1,4 @@
+import "./styles/app.css";
 import { Switch, Route, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./contexts/auth";
