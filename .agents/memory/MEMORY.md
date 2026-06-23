@@ -1,2 +1,4 @@
 - [Baileys build approval](baileys-build.md) — @whiskeysockets/baileys and protobufjs require onlyBuiltDependencies in pnpm-workspace.yaml to run their postinstall scripts.
 - [OpenAI key per user](openai-key-per-user.md) — openaiApiKey stored in users table, served via PUT /auth/profile and GET /auth/settings; whatsapp-manager reads from DB falling back to process.env.
+- [WhatsApp session persistence](wa-session-persistence.md) — sessions stored at /home/runner/.wa-sessions/{agentId}/ (survives restarts); /tmp is wiped on restart.
+- [WhatsApp audio transcription](wa-audio-transcription.md) — PTT/audio detected via msg.message.audioMessage|pttMessage; downloaded with downloadMediaMessage as buffer; sent to Whisper as audio/ogg; language: "pt".

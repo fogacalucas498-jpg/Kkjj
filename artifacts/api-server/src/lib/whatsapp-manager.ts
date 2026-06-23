@@ -54,6 +54,29 @@ class WhatsAppManager extends EventEmitter {
     } catch (err) {
       logger.error({ err }, "Failed to reconnect persisted sessions");
     }
+
+    // ── Watchdog: every 3 minutes check for disconnected sessions and reconnect ──
+    setInterval(async () => {
+      try {
+        const sessions = await db
+          .select({ agentId: whatsappSessionsTable.agentId })
+          .from(whatsappSessionsTable)
+          .where(eq(whatsappSessionsTable.status, "connected"));
+
+        for (const { agentId } of sessions) {
+          const state = this.sessions.get(agentId);
+          // If DB says connected but our map doesn't have a live socket, reconnect
+          if (!state || state.status === "disconnected") {
+            const credsPath = path.join(SESSIONS_DIR, String(agentId), "creds.json");
+            if (fs.existsSync(credsPath)) {
+              logger.info({ agentId }, "Watchdog: reconnecting dropped session");
+              this.sessions.delete(agentId);
+              this.connect(agentId).catch(() => {});
+            }
+          }
+        }
+      } catch {}
+    }, 3 * 60 * 1_000);
   }
 
   // ─── Connect / create Baileys socket ────────────────────────────────────
@@ -170,9 +193,9 @@ class WhatsAppManager extends EventEmitter {
             return;
           }
 
-          // Exponential backoff: 5s → 7.5s → 11s → … max 2min
+          // Exponential backoff: 5s → 7.5s → 11s → … max 30s (24/7 operation)
           const attempts = reconnectAttempts + 1;
-          const delay = Math.min(5_000 * Math.pow(1.5, Math.min(attempts - 1, 8)), 120_000);
+          const delay = Math.min(5_000 * Math.pow(1.5, Math.min(attempts - 1, 5)), 30_000);
           logger.info({ agentId, delay, attempts }, "Scheduling WhatsApp reconnect");
 
           setTimeout(() => {
@@ -237,8 +260,8 @@ class WhatsAppManager extends EventEmitter {
     // Skip group messages and broadcast
     if (!jid || jid.endsWith("@g.us") || jid === "status@broadcast") return;
 
-    // Extract text from all common message types
-    const text =
+    // ── Extract text from common message types ──
+    let text: string =
       msg.message.conversation ??
       msg.message.extendedTextMessage?.text ??
       msg.message.imageMessage?.caption ??
@@ -247,6 +270,25 @@ class WhatsAppManager extends EventEmitter {
       msg.message.listResponseMessage?.title ??
       msg.message.templateButtonReplyMessage?.selectedDisplayText ??
       "";
+
+    let isAudio = false;
+
+    // ── If no text, try to transcribe audio/PTT (voice note) ──
+    if (!text.trim() && (msg.message.audioMessage || msg.message.pttMessage)) {
+      isAudio = true;
+      const transcribed = await this.transcribeAudio(agentId, sock, msg);
+      if (transcribed) {
+        text = transcribed;
+      } else {
+        // Could not transcribe — send a helpful fallback
+        try {
+          await sock.sendMessage(jid, {
+            text: "Desculpe, não consegui transcrever o áudio. Por favor, envie sua mensagem em texto. 🙏"
+          });
+        } catch {}
+        return;
+      }
+    }
 
     if (!text.trim()) return;
 
@@ -303,12 +345,13 @@ class WhatsAppManager extends EventEmitter {
     });
 
     // ── SSE notification to dashboard ──
+    const displayText = isAudio ? `🎵 ${text}` : text;
     sseEmit(agentRow.userId, {
       type: "new_message",
       conversationId: conv.id,
       contactName,
       contactPhone,
-      text: text.length > 60 ? text.slice(0, 60) + "…" : text,
+      text: displayText.length > 60 ? displayText.slice(0, 60) + "…" : displayText,
       isNew,
       agentId,
     });
@@ -361,6 +404,66 @@ class WhatsAppManager extends EventEmitter {
     // Remove credentials so next connect asks for fresh QR
     const authDir = path.join(SESSIONS_DIR, String(agentId));
     try { fs.rmSync(authDir, { recursive: true, force: true }); } catch {}
+  }
+
+  // ─── Transcribe audio message with OpenAI Whisper ────────────────────────
+  private async transcribeAudio(agentId: number, sock: any, msg: any): Promise<string | null> {
+    try {
+      // Get API key for this agent's user
+      const [agentRow] = await db
+        .select({ userId: agentsTable.userId })
+        .from(agentsTable)
+        .where(eq(agentsTable.id, agentId))
+        .limit(1);
+      if (!agentRow) return null;
+
+      const [userRow] = await db
+        .select({ openaiApiKey: usersTable.openaiApiKey })
+        .from(usersTable)
+        .where(eq(usersTable.id, agentRow.userId))
+        .limit(1);
+
+      const apiKey = userRow?.openaiApiKey?.trim() || process.env["OPENAI_API_KEY"];
+      if (!apiKey) {
+        logger.warn({ agentId }, "No OpenAI key — cannot transcribe audio");
+        return null;
+      }
+
+      // Download audio buffer from WhatsApp CDN
+      const { downloadMediaMessage } = await import("@whiskeysockets/baileys") as any;
+      const audioBuffer: Buffer = await downloadMediaMessage(
+        msg,
+        "buffer",
+        {},
+        { logger: { level: "silent", info() {}, warn() {}, error() {}, debug() {}, trace() {}, fatal() {}, child() { return this; } }, reuploadRequest: sock.updateMediaMessage }
+      );
+
+      if (!audioBuffer || audioBuffer.length === 0) {
+        logger.warn({ agentId }, "Empty audio buffer received");
+        return null;
+      }
+
+      // WhatsApp sends PTT/audio as OGG/OPUS — Whisper supports OGG
+      const { default: OpenAI, toFile } = await import("openai");
+      const client = new OpenAI({ apiKey });
+
+      const audioFile = await toFile(audioBuffer, "audio.ogg", { type: "audio/ogg" });
+
+      const transcription = await client.audio.transcriptions.create({
+        model: "whisper-1",
+        file: audioFile,
+        language: "pt", // Portuguese — change if multilingual agents are needed
+      });
+
+      const text = transcription.text?.trim();
+      if (!text) return null;
+
+      logger.info({ agentId, chars: text.length }, "Audio transcribed via Whisper");
+      return text;
+    } catch (err) {
+      logger.error({ err, agentId }, "Audio transcription failed");
+      return null;
+    }
   }
 
   // ─── Generate AI reply ──────────────────────────────────────────────────
