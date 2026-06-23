@@ -81,7 +81,6 @@ function BarChart({ data }: { data: { label: string; count: number }[] }) {
           const barH = maxVal > 0 ? Math.max((d.count / maxVal) * (chartH - 20), d.count > 0 ? 4 : 0) : 0;
           const x = i * (barW + gap) + 4;
           const y = chartH - 16 - barH;
-          const isToday = (new Date().toISOString().slice(0, 10) === new Date(Date.now() - i * 0 + (6 - i) * 0).toISOString().slice(0, 10));
           const grad = i === data.length - 1 ? "url(#barGrad)" : "url(#barGradDim)";
           return (
             <g key={i}>

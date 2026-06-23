@@ -135,7 +135,7 @@ export default function AgentDetail({ id }: Props) {
   if (loading) return <div style={{ color: "#9992b8", padding: 40, textAlign: "center" }}>Carregando...</div>;
   if (!agent) return <div style={{ color: "#f87171", padding: 40 }}>Agente não encontrado</div>;
 
-  const delaySecs: number = (agent as any).responseDelaySecs ?? 3;
+  const delaySecs: number = agent.responseDelaySecs ?? 3;
 
   return (
     <div>

@@ -45,10 +45,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { unreadCount, lastNotif } = useNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [toastKey, setToastKey] = useState(0);
-
-  // Re-trigger toast animation on new notification
-  const prevNotif = lastNotif;
 
   const closeSidebar = () => setSidebarOpen(false);
 

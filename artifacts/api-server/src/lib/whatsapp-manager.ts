@@ -1,15 +1,29 @@
 import { EventEmitter } from "events";
 import fs from "fs";
 import path from "path";
-import { db, whatsappSessionsTable, conversationsTable, messagesTable, agentsTable, knowledgeTable, usersTable } from "@workspace/db";
+import {
+  db,
+  whatsappSessionsTable,
+  conversationsTable,
+  messagesTable,
+  agentsTable,
+  knowledgeTable,
+  usersTable,
+} from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { sseEmit } from "./sse-bus";
 
-// ─── Session persistence directory ─────────────────────────────────────────
-// /home/runner survives container restarts; /tmp is wiped every restart.
+// ─── Session persistence ─────────────────────────────────────────────────────
+// /home/runner persists across container restarts; /tmp is wiped every restart.
 const SESSIONS_DIR = path.join(process.env["HOME"] ?? "/home/runner", ".wa-sessions");
 fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+
+// ─── Language directive appended to every system prompt ─────────────────────
+// Written in English so GPT follows it reliably regardless of base language.
+const LANGUAGE_DIRECTIVE = `
+
+CRITICAL RULE — LANGUAGE: Detect the language of the user's latest message and respond EXCLUSIVELY in that same language. Examples: user writes in English → respond in English; Spanish → Spanish; Portuguese → Portuguese; French → French. NEVER mix languages or ignore this rule.`;
 
 interface SessionState {
   status: "connecting" | "qr" | "connected" | "disconnected";
@@ -26,46 +40,45 @@ class WhatsAppManager extends EventEmitter {
     return this.sessions.get(agentId);
   }
 
-  // ─── Auto-reconnect all sessions that were connected before restart ─────
+  // ─── Startup: reconnect sessions that were connected before restart ──────
   async reconnectPersisted() {
     try {
-      const connected = await db
+      const rows = await db
         .select({ agentId: whatsappSessionsTable.agentId })
         .from(whatsappSessionsTable)
         .where(eq(whatsappSessionsTable.status, "connected"));
 
-      for (const { agentId } of connected) {
-        const sessionDir = path.join(SESSIONS_DIR, String(agentId));
-        // Only reconnect if we have saved credentials
-        if (fs.existsSync(path.join(sessionDir, "creds.json"))) {
+      for (const { agentId } of rows) {
+        const credsPath = path.join(SESSIONS_DIR, String(agentId), "creds.json");
+        if (fs.existsSync(credsPath)) {
           logger.info({ agentId }, "Auto-reconnecting persisted WhatsApp session");
           this.connect(agentId).catch(err =>
             logger.error({ err, agentId }, "Auto-reconnect failed")
           );
         } else {
-          // No credentials file — mark as disconnected so user re-scans QR
+          // No credentials on disk — mark as disconnected so user re-scans QR
           await db
             .update(whatsappSessionsTable)
             .set({ status: "disconnected", qrCode: null, updatedAt: new Date() })
             .where(eq(whatsappSessionsTable.agentId, agentId))
             .catch(() => {});
+          logger.info({ agentId }, "Session marked disconnected — credentials not found on disk");
         }
       }
     } catch (err) {
-      logger.error({ err }, "Failed to reconnect persisted sessions");
+      logger.error({ err }, "reconnectPersisted failed");
     }
 
-    // ── Watchdog: every 3 minutes check for disconnected sessions and reconnect ──
+    // ── Watchdog: every 3 min check for dropped sockets and reconnect ────
     setInterval(async () => {
       try {
-        const sessions = await db
+        const rows = await db
           .select({ agentId: whatsappSessionsTable.agentId })
           .from(whatsappSessionsTable)
           .where(eq(whatsappSessionsTable.status, "connected"));
 
-        for (const { agentId } of sessions) {
+        for (const { agentId } of rows) {
           const state = this.sessions.get(agentId);
-          // If DB says connected but our map doesn't have a live socket, reconnect
           if (!state || state.status === "disconnected") {
             const credsPath = path.join(SESSIONS_DIR, String(agentId), "creds.json");
             if (fs.existsSync(credsPath)) {
@@ -75,11 +88,11 @@ class WhatsAppManager extends EventEmitter {
             }
           }
         }
-      } catch {}
+      } catch { /* ignore */ }
     }, 3 * 60 * 1_000);
   }
 
-  // ─── Connect / create Baileys socket ────────────────────────────────────
+  // ─── Connect ─────────────────────────────────────────────────────────────
   async connect(agentId: number) {
     const existing = this.sessions.get(agentId);
     if (
@@ -89,17 +102,12 @@ class WhatsAppManager extends EventEmitter {
     ) return;
 
     const reconnectAttempts = existing?.reconnectAttempts ?? 0;
-    this.sessions.set(agentId, { status: "connecting", reconnectAttempts });
+    const sessionState: SessionState = { status: "connecting", reconnectAttempts };
+    this.sessions.set(agentId, sessionState);
 
     try {
-      const baileys = await import("@whiskeysockets/baileys") as any;
-      const {
-        default: makeWASocket,
-        useMultiFileAuthState,
-        DisconnectReason,
-        fetchLatestBaileysVersion,
-        Browsers,
-      } = baileys;
+      const baileys = (await import("@whiskeysockets/baileys")) as any;
+      const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = baileys;
 
       const authDir = path.join(SESSIONS_DIR, String(agentId));
       fs.mkdirSync(authDir, { recursive: true });
@@ -107,12 +115,15 @@ class WhatsAppManager extends EventEmitter {
       const { state, saveCreds } = await useMultiFileAuthState(authDir);
       const { version } = await fetchLatestBaileysVersion();
 
-      // Browsers.ubuntu("Chrome") is the recommended fingerprint for all devices
-      // including iOS WhatsApp scanning
+      // Browsers.ubuntu("Chrome") is the recommended fingerprint — works on iOS and Android
       const browserConfig =
-        typeof Browsers?.ubuntu === "function"
-          ? Browsers.ubuntu("Chrome")
-          : ["Ubuntu", "Chrome", "20.0.04"];
+        typeof Browsers?.ubuntu === "function" ? Browsers.ubuntu("Chrome") : ["Ubuntu", "Chrome", "20.0.04"];
+
+      const silentLogger = {
+        level: "silent",
+        info() {}, warn() {}, error() {}, debug() {}, trace() {}, fatal() {},
+        child() { return this; },
+      };
 
       const sock = makeWASocket({
         version,
@@ -125,32 +136,21 @@ class WhatsAppManager extends EventEmitter {
         keepAliveIntervalMs: 25_000,
         retryRequestDelayMs: 500,
         generateHighQualityLinkPreview: false,
-        // Silent logger — we use pino ourselves
-        logger: {
-          level: "silent",
-          info() {}, warn() {}, error() {},
-          debug() {}, trace() {}, fatal() {},
-          child() { return this; },
-        },
+        logger: silentLogger,
       });
 
-      const sessionState: SessionState = {
-        status: "connecting",
-        sock,
-        reconnectAttempts,
-      };
+      sessionState.sock = sock;
       this.sessions.set(agentId, sessionState);
 
       sock.ev.on("creds.update", saveCreds);
 
-      // ── Connection lifecycle ──
+      // ── Connection lifecycle ───────────────────────────────────────────
       sock.ev.on("connection.update", async (update: any) => {
         const { connection, lastDisconnect, qr } = update;
 
-        // New QR code received
         if (qr) {
           try {
-            const QRCode = (await import("qrcode")).default;
+            const QRCode = ((await import("qrcode")) as any).default;
             const qrDataURL = await QRCode.toDataURL(qr, { width: 300 });
             sessionState.status = "qr";
             sessionState.qr = qrDataURL;
@@ -161,7 +161,7 @@ class WhatsAppManager extends EventEmitter {
               .where(eq(whatsappSessionsTable.agentId, agentId))
               .catch(() => {});
           } catch (err) {
-            logger.error({ err, agentId }, "QR generation error");
+            logger.error({ err, agentId }, "QR code generation failed");
           }
         }
 
@@ -186,24 +186,27 @@ class WhatsAppManager extends EventEmitter {
             .catch(() => {});
 
           if (isLoggedOut) {
-            // Remove saved credentials so next connect shows a fresh QR
+            // Clear credentials — next connect will show a fresh QR
             const authDir2 = path.join(SESSIONS_DIR, String(agentId));
             try { fs.rmSync(authDir2, { recursive: true, force: true }); } catch {}
             this.sessions.delete(agentId);
+            logger.info({ agentId }, "Logged out — credentials cleared");
             return;
           }
 
-          // Exponential backoff: 5s → 7.5s → 11s → … max 30s (24/7 operation)
-          const attempts = reconnectAttempts + 1;
-          const delay = Math.min(5_000 * Math.pow(1.5, Math.min(attempts - 1, 5)), 30_000);
-          logger.info({ agentId, delay, attempts }, "Scheduling WhatsApp reconnect");
+          // Exponential backoff: 5s → 7.5s → 11s → 17s → 25s → 30s max
+          // Use sessionState.reconnectAttempts (which resets to 0 on success)
+          const curAttempts = sessionState.reconnectAttempts;
+          const nextAttempts = curAttempts + 1;
+          const delay = Math.min(5_000 * Math.pow(1.5, Math.min(curAttempts, 5)), 30_000);
+          logger.info({ agentId, delay, nextAttempts }, "Scheduling WhatsApp reconnect");
 
           setTimeout(() => {
             const s = this.sessions.get(agentId);
             if (!s || s.status === "disconnected") {
               this.sessions.delete(agentId);
-              const state2: SessionState = { status: "disconnected", reconnectAttempts: attempts };
-              this.sessions.set(agentId, state2);
+              // Seed reconnectAttempts so next connect grows the backoff
+              this.sessions.set(agentId, { status: "disconnected", reconnectAttempts: nextAttempts });
               this.connect(agentId).catch(() => {});
             }
           }, delay);
@@ -214,7 +217,7 @@ class WhatsAppManager extends EventEmitter {
           sessionState.status = "connected";
           sessionState.phoneNumber = phone ?? undefined;
           sessionState.qr = undefined;
-          sessionState.reconnectAttempts = 0;
+          sessionState.reconnectAttempts = 0; // reset on successful connection
           this.sessions.set(agentId, { ...sessionState });
 
           await db
@@ -223,27 +226,28 @@ class WhatsAppManager extends EventEmitter {
             .where(eq(whatsappSessionsTable.agentId, agentId))
             .catch(() => {});
 
-          logger.info({ agentId, phone }, "WhatsApp connected successfully");
+          logger.info({ agentId, phone }, "WhatsApp connected");
         }
       });
 
-      // ── Incoming messages ──────────────────────────────────────────────
+      // ── Incoming messages ─────────────────────────────────────────────
       sock.ev.on("messages.upsert", async ({ messages, type }: any) => {
-        // "notify" = new real messages. "append" = history/status updates → ignore
+        // "notify" = real new messages; "append" = history sync / status → skip
         if (type !== "notify") return;
 
         for (const msg of messages) {
           try {
             await this.handleIncomingMessage(agentId, sock, msg);
           } catch (err) {
-            logger.error({ err, agentId }, "Error handling incoming WhatsApp message");
+            logger.error({ err, agentId }, "Error handling incoming message");
           }
         }
       });
-
     } catch (err) {
-      logger.error({ err, agentId }, "WhatsApp connect() threw an error");
-      this.sessions.set(agentId, { status: "disconnected", reconnectAttempts });
+      logger.error({ err, agentId }, "connect() threw an unexpected error");
+      sessionState.status = "disconnected";
+      sessionState.sock = undefined;
+      this.sessions.set(agentId, { ...sessionState });
       await db
         .update(whatsappSessionsTable)
         .set({ status: "disconnected", qrCode: null, updatedAt: new Date() })
@@ -257,10 +261,25 @@ class WhatsAppManager extends EventEmitter {
     if (msg.key.fromMe || !msg.message) return;
 
     const jid: string = msg.key.remoteJid ?? "";
-    // Skip group messages and broadcast
     if (!jid || jid.endsWith("@g.us") || jid === "status@broadcast") return;
 
-    // ── Extract text from common message types ──
+    // ── Resolve agent & API key first (needed for audio transcription too) ──
+    const [agentRow] = await db
+      .select()
+      .from(agentsTable)
+      .where(eq(agentsTable.id, agentId))
+      .limit(1);
+    if (!agentRow) return;
+
+    const [userRow] = await db
+      .select({ openaiApiKey: usersTable.openaiApiKey })
+      .from(usersTable)
+      .where(eq(usersTable.id, agentRow.userId))
+      .limit(1);
+
+    const apiKey = userRow?.openaiApiKey?.trim() || process.env["OPENAI_API_KEY"] || null;
+
+    // ── Extract text from all common WhatsApp message types ──
     let text: string =
       msg.message.conversation ??
       msg.message.extendedTextMessage?.text ??
@@ -273,17 +292,26 @@ class WhatsAppManager extends EventEmitter {
 
     let isAudio = false;
 
-    // ── If no text, try to transcribe audio/PTT (voice note) ──
+    // ── Audio / PTT (voice note) → transcribe with Whisper ──
     if (!text.trim() && (msg.message.audioMessage || msg.message.pttMessage)) {
       isAudio = true;
-      const transcribed = await this.transcribeAudio(agentId, sock, msg);
+      if (!apiKey) {
+        logger.warn({ agentId }, "No OpenAI key — cannot transcribe audio");
+        try {
+          await sock.sendMessage(jid, {
+            text: "Não foi possível transcrever o áudio (chave OpenAI não configurada). Por favor, envie sua mensagem em texto. 🙏",
+          });
+        } catch {}
+        return;
+      }
+
+      const transcribed = await this.transcribeAudio(sock, msg, apiKey);
       if (transcribed) {
         text = transcribed;
       } else {
-        // Could not transcribe — send a helpful fallback
         try {
           await sock.sendMessage(jid, {
-            text: "Desculpe, não consegui transcrever o áudio. Por favor, envie sua mensagem em texto. 🙏"
+            text: "Não consegui transcrever o áudio. Por favor, envie sua mensagem em texto. 🙏",
           });
         } catch {}
         return;
@@ -293,34 +321,21 @@ class WhatsAppManager extends EventEmitter {
     if (!text.trim()) return;
 
     const contactPhone = jid.replace("@s.whatsapp.net", "");
-    const contactName: string = msg.pushName ?? contactPhone;
+    const contactName: string = (msg.pushName as string | undefined) ?? contactPhone;
 
-    // Load session row
+    // ── Session row ──
     const [session] = await db
-      .select()
+      .select({ id: whatsappSessionsTable.id })
       .from(whatsappSessionsTable)
       .where(eq(whatsappSessionsTable.agentId, agentId))
       .limit(1);
     if (!session) return;
 
-    // Load agent (with responseDelaySecs)
-    const [agentRow] = await db
-      .select()
-      .from(agentsTable)
-      .where(eq(agentsTable.id, agentId))
-      .limit(1);
-    if (!agentRow) return;
-
     // ── Get or create conversation ──
     let [conv] = await db
       .select()
       .from(conversationsTable)
-      .where(
-        and(
-          eq(conversationsTable.contactPhone, contactPhone),
-          eq(conversationsTable.sessionId, session.id)
-        )
-      )
+      .where(and(eq(conversationsTable.contactPhone, contactPhone), eq(conversationsTable.sessionId, session.id)))
       .limit(1);
 
     const isNew = !conv;
@@ -337,37 +352,37 @@ class WhatsAppManager extends EventEmitter {
         .where(eq(conversationsTable.id, conv.id));
     }
 
-    // ── Save user message ──
-    await db.insert(messagesTable).values({
-      conversationId: conv.id,
-      content: text,
-      role: "user",
-    });
+    // ── Persist user message ──
+    await db.insert(messagesTable).values({ conversationId: conv.id, content: text, role: "user" });
 
-    // ── SSE notification to dashboard ──
-    const displayText = isAudio ? `🎵 ${text}` : text;
+    // ── SSE push to dashboard ──
+    const preview = isAudio ? `🎵 ${text}` : text;
     sseEmit(agentRow.userId, {
       type: "new_message",
       conversationId: conv.id,
       contactName,
       contactPhone,
-      text: displayText.length > 60 ? displayText.slice(0, 60) + "…" : displayText,
+      text: preview.length > 60 ? preview.slice(0, 60) + "…" : preview,
       isNew,
       agentId,
     });
 
     // ── Generate AI reply ──
-    const aiReply = await this.generateReply(agentRow, conv.id);
+    if (!apiKey) {
+      logger.warn({ agentId }, "No OpenAI key — skipping AI reply. Configure it in Configurações.");
+      return;
+    }
+
+    const aiReply = await this.generateReply(agentRow, conv.id, apiKey);
     if (!aiReply) return;
 
     // ── Typing indicator + configurable delay ──
     const delaySecs = Math.max(1, Math.min(agentRow.responseDelaySecs ?? 3, 60));
-
     try { await sock.sendPresenceUpdate("composing", jid); } catch {}
-    await new Promise(r => setTimeout(r, delaySecs * 1_000));
+    await new Promise<void>(r => setTimeout(r, delaySecs * 1_000));
     try { await sock.sendPresenceUpdate("paused", jid); } catch {}
 
-    // ── Send message ──
+    // ── Send WhatsApp message ──
     try {
       await sock.sendMessage(jid, { text: aiReply });
     } catch (err) {
@@ -376,12 +391,7 @@ class WhatsAppManager extends EventEmitter {
     }
 
     // ── Persist assistant reply ──
-    await db.insert(messagesTable).values({
-      conversationId: conv.id,
-      content: aiReply,
-      role: "assistant",
-    });
-
+    await db.insert(messagesTable).values({ conversationId: conv.id, content: aiReply, role: "assistant" });
     await db
       .update(conversationsTable)
       .set({ lastMessage: aiReply, lastMessageAt: new Date() })
@@ -401,133 +411,114 @@ class WhatsAppManager extends EventEmitter {
       .set({ status: "disconnected", qrCode: null, updatedAt: new Date() })
       .where(eq(whatsappSessionsTable.agentId, agentId));
 
-    // Remove credentials so next connect asks for fresh QR
+    // Clear credentials so next connect shows fresh QR
     const authDir = path.join(SESSIONS_DIR, String(agentId));
     try { fs.rmSync(authDir, { recursive: true, force: true }); } catch {}
   }
 
-  // ─── Transcribe audio message with OpenAI Whisper ────────────────────────
-  private async transcribeAudio(agentId: number, sock: any, msg: any): Promise<string | null> {
+  // ─── Transcribe audio with OpenAI Whisper ───────────────────────────────
+  // Whisper supports: mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm
+  // WhatsApp sends PTT and audio as OGG/OPUS — works natively.
+  // No language param → Whisper auto-detects (enables multi-language).
+  private async transcribeAudio(sock: any, msg: any, apiKey: string): Promise<string | null> {
     try {
-      // Get API key for this agent's user
-      const [agentRow] = await db
-        .select({ userId: agentsTable.userId })
-        .from(agentsTable)
-        .where(eq(agentsTable.id, agentId))
-        .limit(1);
-      if (!agentRow) return null;
+      const { downloadMediaMessage } = (await import("@whiskeysockets/baileys")) as any;
+      const silentLogger = {
+        level: "silent",
+        info() {}, warn() {}, error() {}, debug() {}, trace() {}, fatal() {},
+        child() { return this; },
+      };
 
-      const [userRow] = await db
-        .select({ openaiApiKey: usersTable.openaiApiKey })
-        .from(usersTable)
-        .where(eq(usersTable.id, agentRow.userId))
-        .limit(1);
-
-      const apiKey = userRow?.openaiApiKey?.trim() || process.env["OPENAI_API_KEY"];
-      if (!apiKey) {
-        logger.warn({ agentId }, "No OpenAI key — cannot transcribe audio");
-        return null;
-      }
-
-      // Download audio buffer from WhatsApp CDN
-      const { downloadMediaMessage } = await import("@whiskeysockets/baileys") as any;
       const audioBuffer: Buffer = await downloadMediaMessage(
         msg,
         "buffer",
         {},
-        { logger: { level: "silent", info() {}, warn() {}, error() {}, debug() {}, trace() {}, fatal() {}, child() { return this; } }, reuploadRequest: sock.updateMediaMessage }
+        { logger: silentLogger, reuploadRequest: sock.updateMediaMessage }
       );
 
       if (!audioBuffer || audioBuffer.length === 0) {
-        logger.warn({ agentId }, "Empty audio buffer received");
+        logger.warn("transcribeAudio: received empty buffer");
         return null;
       }
 
-      // WhatsApp sends PTT/audio as OGG/OPUS — Whisper supports OGG
-      const { default: OpenAI, toFile } = await import("openai");
+      const { default: OpenAI, toFile } = (await import("openai")) as any;
       const client = new OpenAI({ apiKey });
 
+      // Do NOT specify language → Whisper auto-detects for multi-language support
       const audioFile = await toFile(audioBuffer, "audio.ogg", { type: "audio/ogg" });
-
       const transcription = await client.audio.transcriptions.create({
         model: "whisper-1",
         file: audioFile,
-        language: "pt", // Portuguese — change if multilingual agents are needed
+        // language: omitted intentionally — auto-detect
       });
 
-      const text = transcription.text?.trim();
+      const text: string = transcription.text?.trim() ?? "";
       if (!text) return null;
 
-      logger.info({ agentId, chars: text.length }, "Audio transcribed via Whisper");
+      logger.info({ chars: text.length }, "Audio transcribed via Whisper");
       return text;
     } catch (err) {
-      logger.error({ err, agentId }, "Audio transcription failed");
+      logger.error({ err }, "transcribeAudio failed");
       return null;
     }
   }
 
   // ─── Generate AI reply ──────────────────────────────────────────────────
-  private async generateReply(agent: typeof agentsTable.$inferSelect, convId: number): Promise<string | null> {
+  private async generateReply(
+    agent: typeof agentsTable.$inferSelect,
+    convId: number,
+    apiKey: string,
+  ): Promise<string | null> {
     try {
-      // Get API key (user's key has priority over env)
-      const [userRow] = await db
-        .select({ openaiApiKey: usersTable.openaiApiKey })
-        .from(usersTable)
-        .where(eq(usersTable.id, agent.userId))
-        .limit(1);
-
-      const apiKey = userRow?.openaiApiKey?.trim() || process.env["OPENAI_API_KEY"];
-      if (!apiKey) {
-        logger.warn({ agentId: agent.id }, "No OpenAI API key — cannot generate reply. Set it in Configurações.");
-        return null;
-      }
-
       // Knowledge base
       const knowledge = await db
         .select({ title: knowledgeTable.title, content: knowledgeTable.content })
         .from(knowledgeTable)
         .where(eq(knowledgeTable.agentId, agent.id));
 
-      const knowledgeText = knowledge
-        .map(k => `### ${k.title}\n${k.content}`)
-        .join("\n\n");
+      const knowledgeText = knowledge.map(k => `### ${k.title}\n${k.content}`).join("\n\n");
 
-      // Conversation history — ordered by createdAt (user message already inserted)
+      // Conversation history — ordered chronologically; user message already saved
       const history = await db
-        .select({ role: messagesTable.role, content: messagesTable.content, createdAt: messagesTable.createdAt })
+        .select({ role: messagesTable.role, content: messagesTable.content })
         .from(messagesTable)
         .where(eq(messagesTable.conversationId, convId))
         .orderBy(messagesTable.createdAt);
 
-      // Keep last 20 turns (user + assistant pairs)
+      // Use last 20 messages for context (10 user + 10 assistant turns)
       const last20 = history.slice(-20);
 
-      const baseInstructions = agent.instructions?.trim()
-        || `Você é ${agent.name}, um assistente virtual inteligente. Responda sempre em português, de forma clara e útil.`;
+      // Base instructions: use agent's custom instructions or a neutral default
+      const baseInstructions =
+        agent.instructions?.trim() ||
+        `Você é ${agent.name}, um assistente virtual inteligente e prestativo. Seja educado, claro e objetivo.`;
 
-      const systemPrompt = knowledgeText
-        ? `${baseInstructions}\n\n## Base de Conhecimento\nUse as informações abaixo para responder às perguntas dos usuários. Priorize estas informações.\n\n${knowledgeText}`
-        : baseInstructions;
+      // Build system prompt
+      let systemPrompt = baseInstructions;
+      if (knowledgeText) {
+        systemPrompt += `\n\n## Base de Conhecimento\nUse as informações abaixo para responder. Priorize estas informações.\n\n${knowledgeText}`;
+      }
 
-      const { default: OpenAI } = await import("openai");
+      // ── Multi-language directive — always appended ──
+      // GPT reliably follows this regardless of the rest of the prompt language.
+      systemPrompt += LANGUAGE_DIRECTIVE;
+
+      const { default: OpenAI } = (await import("openai")) as any;
       const client = new OpenAI({ apiKey });
 
       const completion = await client.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
-          ...last20.map(m => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })),
-          // NOTE: user message is already in last20 (saved before this call)
-          // Do NOT append it again here — that would duplicate it.
+          // History already includes the latest user message (saved before this call)
+          // Do NOT append userMessage again — that would duplicate it in the context.
+          ...last20.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
         ],
         max_tokens: 600,
         temperature: 0.75,
       });
 
-      const reply = completion.choices[0]?.message?.content?.trim();
+      const reply: string = completion.choices[0]?.message?.content?.trim() ?? "";
       if (!reply) return null;
 
       logger.info({ agentId: agent.id, convId, replyLen: reply.length }, "AI reply generated");

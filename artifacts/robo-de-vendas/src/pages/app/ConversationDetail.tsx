@@ -17,8 +17,7 @@ export default function ConversationDetail({ id }: Props) {
   useEffect(() => { load(); }, [convId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [data?.messages?.length]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const doSend = async () => {
     if (!reply.trim()) return;
     setSending(true);
     try {
@@ -29,10 +28,12 @@ export default function ConversationDetail({ id }: Props) {
     setSending(false);
   };
 
+  const handleSend = (e: React.FormEvent) => { e.preventDefault(); doSend(); };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend(e as any);
+      doSend();
     }
   };
 
