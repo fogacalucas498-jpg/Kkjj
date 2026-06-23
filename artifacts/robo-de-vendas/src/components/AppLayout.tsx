@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../contexts/auth";
 import { useNotifications } from "../hooks/useNotifications";
+import { Icon, type IconName } from "./Icon";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -14,31 +15,12 @@ function isActive(location: string, href: string) {
   return location.startsWith(href);
 }
 
-const navItems = [
-  { href: "/app",               label: "Dashboard",     icon: "📊" },
-  { href: "/app/agents",        label: "Agentes",       icon: "🤖" },
-  { href: "/app/conversations", label: "Conversas",     icon: "💬", badge: true },
-  { href: "/app/settings",      label: "Configurações", icon: "⚙️" },
+const navItems: { href: string; label: string; iconName: IconName; badge?: boolean }[] = [
+  { href: "/app",               label: "Dashboard",     iconName: "chart-bar" },
+  { href: "/app/agents",        label: "Agentes",       iconName: "robot" },
+  { href: "/app/conversations", label: "Conversas",     iconName: "comments", badge: true },
+  { href: "/app/settings",      label: "Configurações", iconName: "gear" },
 ];
-
-function HamburgerIcon() {
-  return (
-    <svg width="18" height="14" viewBox="0 0 18 14" fill="currentColor">
-      <rect y="0"  width="18" height="2" rx="1"/>
-      <rect y="6"  width="13" height="2" rx="1"/>
-      <rect y="12" width="18" height="2" rx="1"/>
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="1" y1="1" x2="13" y2="13"/>
-      <line x1="13" y1="1" x2="1" y2="13"/>
-    </svg>
-  );
-}
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -84,10 +66,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
           </Link>
-          {/* Close button (mobile only, hidden via CSS on desktop) */}
-          <button onClick={closeSidebar} className="hamburger" style={{ display: "none" }}
-            id="sidebar-close-btn">
-            <CloseIcon />
+          <button onClick={closeSidebar} className="hamburger" style={{ display: "none" }} id="sidebar-close-btn">
+            <Icon name="xmark" size={14} />
           </button>
         </div>
 
@@ -111,7 +91,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(139,92,246,0.06)"; }}
                   onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
                 >
-                  <span style={{ fontSize: 17, lineHeight: 1 }}>{item.icon}</span>
+                  <span style={{ width: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Icon name={item.iconName} size={15} color={active ? "#a78bfa" : "#9992b8"} />
+                  </span>
                   <span style={{ flex: 1 }}>{item.label}</span>
                   {showBadge && (
                     <span style={{
@@ -156,9 +138,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name}</div>
               <div style={{ fontSize: 11, color: "#9992b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</div>
             </div>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9992b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-              <path d="M9 18l6-6-6-6" />
-            </svg>
+            <Icon name="chevron-right" size={11} color="#9992b8" style={{ flexShrink: 0 }} />
           </div>
         </Link>
 
@@ -167,10 +147,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             width: "100%", padding: "9px", borderRadius: 8, background: "transparent",
             border: "1px solid rgba(139,92,246,0.12)", color: "#9992b8", fontSize: 13,
             fontWeight: 600, cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}
             onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.06)"; e.currentTarget.style.color = "#f87171"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.2)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#9992b8"; e.currentTarget.style.borderColor = "rgba(139,92,246,0.12)"; }}
           >
+            <Icon name="right-from-bracket" size={13} />
             Sair da conta
           </button>
         </div>
@@ -181,7 +163,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {/* Mobile top bar */}
         <div className="app-mobile-topbar">
           <button className="hamburger" onClick={() => setSidebarOpen(true)}>
-            <HamburgerIcon />
+            <Icon name="bars" size={16} />
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <img src={`${BASE}images/logo.jpg`} alt="logo" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
@@ -233,9 +215,11 @@ function Toast({ notif }: { notif: { contactName: string; text: string } | null 
       <div style={{
         width: 38, height: 38, borderRadius: 12, flexShrink: 0,
         background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
-        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+        display: "flex", alignItems: "center", justifyContent: "center",
         boxShadow: "0 4px 12px rgba(139,92,246,0.4)",
-      }}>💬</div>
+      }}>
+        <Icon name="whatsapp" size={20} color="#fff" />
+      </div>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 12, color: "#9992b8", marginBottom: 2 }}>Nova mensagem WhatsApp</div>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 3 }}>{notif.contactName}</div>

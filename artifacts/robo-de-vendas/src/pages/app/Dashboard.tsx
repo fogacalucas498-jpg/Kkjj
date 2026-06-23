@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "../../contexts/auth";
 import { agentsApi, conversationsApi, statsApi, type Agent, type Conversation, type Stats } from "../../lib/api";
+import { Icon, type IconName } from "../../components/Icon";
 
 /* ── Animated counter ── */
 function useCounter(target: number, delay = 0) {
@@ -48,7 +49,6 @@ function BarChart({ data }: { data: { label: string; count: number }[] }) {
   const barW = 28;
   const gap = 14;
   const totalW = data.length * (barW + gap) - gap;
-  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div style={{ width: "100%", overflowX: "auto" }}>
@@ -62,13 +62,8 @@ function BarChart({ data }: { data: { label: string; count: number }[] }) {
             <stop offset="0%" stopColor="rgba(139,92,246,0.55)" />
             <stop offset="100%" stopColor="rgba(109,40,217,0.3)" />
           </linearGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="2" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
         </defs>
 
-        {/* Grid lines */}
         {[0.25, 0.5, 0.75, 1].map(frac => {
           const y = chartH - frac * (chartH - 16);
           return (
@@ -119,10 +114,10 @@ function BarChart({ data }: { data: { label: string; count: number }[] }) {
 
 /* ── Stat card ── */
 function StatCard({
-  label, value, sub, icon, color, delay,
+  label, value, sub, iconName, color, delay,
   isText = false,
 }: {
-  label: string; value: number | string; sub?: string; icon: string;
+  label: string; value: number | string; sub?: string; iconName: IconName;
   color: string; delay: number; isText?: boolean;
 }) {
   const numVal = typeof value === "number" ? value : 0;
@@ -132,7 +127,6 @@ function StatCard({
   return (
     <div className={`stat-card anim-fade-up anim-delay-${delay / 80}`}
       style={{ animationDelay: `${delay}ms` }}>
-      {/* Glow orb */}
       <div style={{
         position: "absolute", top: -20, right: -20, width: 80, height: 80,
         borderRadius: "50%", background: `radial-gradient(circle, ${color}22 0%, transparent 70%)`,
@@ -145,8 +139,9 @@ function StatCard({
           background: `linear-gradient(135deg, ${color}22, ${color}11)`,
           border: `1px solid ${color}33`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 18,
-        }}>{icon}</div>
+        }}>
+          <Icon name={iconName} size={18} color={color} />
+        </div>
         {sub && (
           <div style={{ fontSize: 11, color: "#9992b8", background: "rgba(139,92,246,0.06)", padding: "3px 8px", borderRadius: 100, border: "1px solid rgba(139,92,246,0.1)" }}>
             {sub}
@@ -209,13 +204,13 @@ export default function Dashboard() {
 
       {/* ── Stat cards ── */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
-        <StatCard label="Agentes criados" value={stats?.totalAgents ?? 0} icon="🤖" color="#8b5cf6" delay={80} />
-        <StatCard label="WhatsApp conectado" value={stats?.connectedAgents ?? 0} sub="ao vivo" icon="📱" color="#a78bfa" delay={160} />
-        <StatCard label="Mensagens hoje" value={stats?.todayMessages ?? 0} sub="hoje" icon="💬" color="#7c3aed" delay={240} />
+        <StatCard label="Agentes criados"          value={stats?.totalAgents ?? 0}    iconName="robot"         color="#8b5cf6" delay={80} />
+        <StatCard label="WhatsApp conectado"        value={stats?.connectedAgents ?? 0} iconName="whatsapp"      color="#a78bfa" delay={160} sub="ao vivo" />
+        <StatCard label="Mensagens hoje"            value={stats?.todayMessages ?? 0}  iconName="comments"      color="#7c3aed" delay={240} sub="hoje" />
         <StatCard
           label="Tempo médio de resposta"
           value={formatResponseTime(stats?.avgResponseSecs ?? null)}
-          icon="⚡" color="#c4b5fd" delay={320} isText
+          iconName="bolt" color="#c4b5fd" delay={320} isText
         />
       </div>
 
@@ -231,7 +226,7 @@ export default function Dashboard() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "#9992b8" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 10, height: 10, borderRadius: 3, background: "url(#barGrad) linear-gradient(#a78bfa, #7c3aed)" }} />
+              <div style={{ width: 10, height: 10, borderRadius: 3, background: "linear-gradient(#a78bfa, #7c3aed)" }} />
               Hoje
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -250,8 +245,8 @@ export default function Dashboard() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
             <h2 style={{ fontSize: 15, fontWeight: 800 }}>Seus Agentes</h2>
             <Link href="/app/agents">
-              <span style={{ fontSize: 12, color: "#8b5cf6", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                Ver todos <span style={{ fontSize: 14 }}>→</span>
+              <span style={{ fontSize: 12, color: "#8b5cf6", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                Ver todos <Icon name="arrow-right" size={11} color="#8b5cf6" />
               </span>
             </Link>
           </div>
@@ -264,7 +259,9 @@ export default function Dashboard() {
             </div>
           ) : agents.length === 0 ? (
             <div style={{ textAlign: "center", padding: "28px 0" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>🤖</div>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>
+                <Icon name="robot" size={40} color="rgba(139,92,246,0.25)" />
+              </div>
               <p style={{ color: "#9992b8", fontSize: 13, marginBottom: 16 }}>Nenhum agente criado ainda</p>
               <Link href="/app/agents">
                 <button style={{ padding: "8px 18px", background: "linear-gradient(135deg,#8b5cf6,#7c3aed)", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
@@ -289,8 +286,9 @@ export default function Dashboard() {
                         width: 34, height: 34, borderRadius: 10, flexShrink: 0,
                         background: `linear-gradient(135deg, rgba(139,92,246,${0.15 + i * 0.05}), rgba(109,40,217,0.1))`,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 16,
-                      }}>🤖</div>
+                      }}>
+                        <Icon name="robot" size={16} color="#a78bfa" />
+                      </div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
                         <div style={{ fontSize: 11, color: "#9992b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.description || "Sem descrição"}</div>
@@ -318,15 +316,17 @@ export default function Dashboard() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
             <h2 style={{ fontSize: 15, fontWeight: 800 }}>Conversas Recentes</h2>
             <Link href="/app/conversations">
-              <span style={{ fontSize: 12, color: "#8b5cf6", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                Ver todas <span style={{ fontSize: 14 }}>→</span>
+              <span style={{ fontSize: 12, color: "#8b5cf6", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                Ver todas <Icon name="arrow-right" size={11} color="#8b5cf6" />
               </span>
             </Link>
           </div>
 
           {conversations.length === 0 ? (
             <div style={{ textAlign: "center", padding: "28px 0" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>
+                <Icon name="comments" size={40} color="rgba(139,92,246,0.25)" />
+              </div>
               <p style={{ color: "#9992b8", fontSize: 13 }}>
                 Nenhuma conversa ainda.<br />
                 <span style={{ color: "#8b5cf6", fontWeight: 600 }}>Conecte um agente ao WhatsApp!</span>
@@ -379,7 +379,6 @@ export default function Dashboard() {
           border: "1px solid rgba(139,92,246,0.18)",
           position: "relative", overflow: "hidden",
         }}>
-          {/* Animated scan line */}
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0, height: 2,
             background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.6), transparent)",

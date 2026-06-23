@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { agentsApi, type Agent, type AgentExport } from "../../lib/api";
+import { Icon } from "../../components/Icon";
 
 /* ── label / input shared styles ── */
 const labelStyle: React.CSSProperties = {
@@ -22,8 +23,10 @@ function Banner({ type, children }: { type: "error" | "success"; children: React
       background: ok ? "rgba(139,92,246,0.08)" : "rgba(239,68,68,0.08)",
       border: `1px solid ${ok ? "rgba(139,92,246,0.3)" : "rgba(239,68,68,0.3)"}`,
       color: ok ? "#a78bfa" : "#fca5a5",
+      display: "flex", alignItems: "center", gap: 8,
     }}>
-      {ok ? "✓ " : "⚠️ "}{children}
+      <Icon name={ok ? "circle-check" : "triangle-exclamation"} size={13} color={ok ? "#a78bfa" : "#fca5a5"} />
+      {children}
     </div>
   );
 }
@@ -141,11 +144,10 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
 
   return (
     <Modal onClose={onClose}>
-      <ModalBox title="📥 Importar Agente" subtitle="Cole ou carregue um JSON exportado por este sistema.">
-        {/* Tabs */}
+      <ModalBox title="Importar Agente" subtitle="Cole ou carregue um JSON exportado por este sistema.">
         <div style={{ display: "flex", gap: 4, background: "#0e0e1a", padding: 5, borderRadius: 10, marginBottom: 24, width: "fit-content" }}>
-          {tabBtn("paste", "📋 Colar JSON")}
-          {tabBtn("file", "📂 Abrir Arquivo")}
+          {tabBtn("paste", "Colar JSON")}
+          {tabBtn("file", "Abrir Arquivo")}
         </div>
 
         {mode === "paste" ? (
@@ -174,7 +176,9 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
           >
             <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-            <div style={{ fontSize: 36, marginBottom: 12 }}>📂</div>
+            <div style={{ marginBottom: 12 }}>
+              <Icon name="folder-open" size={36} color="rgba(139,92,246,0.4)" />
+            </div>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
               {raw ? "Arquivo carregado ✓" : "Arraste o .json aqui ou clique para selecionar"}
             </div>
@@ -182,10 +186,8 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
           </div>
         )}
 
-        {/* Parse error */}
         {parseError && <Banner type="error">{parseError}</Banner>}
 
-        {/* Preview */}
         {preview && !parseError && (
           <div style={{
             padding: 16, borderRadius: 12, background: "rgba(139,92,246,0.06)",
@@ -200,18 +202,17 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
             )}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               {preview.instructions && (
-                <span style={{ fontSize: 11, padding: "3px 10px", background: "rgba(139,92,246,0.12)", borderRadius: 100, color: "#a78bfa", fontWeight: 700 }}>
-                  📝 Instruções configuradas
+                <span style={{ fontSize: 11, padding: "3px 10px", background: "rgba(139,92,246,0.12)", borderRadius: 100, color: "#a78bfa", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+                  <Icon name="pen" size={10} color="#a78bfa" /> Instruções configuradas
                 </span>
               )}
-              <span style={{ fontSize: 11, padding: "3px 10px", background: "rgba(139,92,246,0.12)", borderRadius: 100, color: "#a78bfa", fontWeight: 700 }}>
-                📚 {preview.knowledge?.length ?? 0} documento{(preview.knowledge?.length ?? 0) !== 1 ? "s" : ""}
+              <span style={{ fontSize: 11, padding: "3px 10px", background: "rgba(139,92,246,0.12)", borderRadius: 100, color: "#a78bfa", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+                <Icon name="book" size={10} color="#a78bfa" /> {preview.knowledge?.length ?? 0} documento{(preview.knowledge?.length ?? 0) !== 1 ? "s" : ""}
               </span>
             </div>
           </div>
         )}
 
-        {/* Import error */}
         {importError && <Banner type="error">{importError}</Banner>}
 
         <div style={{ display: "flex", gap: 12 }}>
@@ -223,13 +224,15 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
           <button onClick={handleImport}
             disabled={!preview || importing || !!parseError}
             style={{
-              flex: 1, padding: "11px",
+              flex: 1, padding: "11px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               background: !preview || !!parseError ? "rgba(139,92,246,0.2)" : "linear-gradient(135deg,#8b5cf6,#7c3aed)",
               border: "none", borderRadius: 8, color: "#fff", fontSize: 14, fontWeight: 700,
               cursor: !preview || !!parseError ? "not-allowed" : "pointer",
               opacity: importing ? 0.7 : 1,
             }}>
-            {importing ? "Importando..." : "✅ Importar Agente"}
+            {importing
+              ? <><Icon name="spinner" size={13} spin /> Importando...</>
+              : <><Icon name="circle-check" size={13} /> Importar Agente</>}
           </button>
         </div>
       </ModalBox>
@@ -284,8 +287,9 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               flex: 1, padding: "11px", background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
               border: "none", borderRadius: 8, color: "#fff", fontSize: 14, fontWeight: 700,
               cursor: "pointer", opacity: saving ? 0.7 : 1,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             }}>
-              {saving ? "Criando..." : "Criar Agente"}
+              {saving ? <><Icon name="spinner" size={13} spin /> Criando...</> : "Criar Agente"}
             </button>
           </div>
         </form>
@@ -336,13 +340,8 @@ export default function Agents() {
     }
   };
 
-  const handleCreated = (agent: Agent) => {
-    navigate(`/app/agents/${agent.id}`);
-  };
-
-  const handleImported = (agent: Agent) => {
-    navigate(`/app/agents/${agent.id}`);
-  };
+  const handleCreated = (agent: Agent) => { navigate(`/app/agents/${agent.id}`); };
+  const handleImported = (agent: Agent) => { navigate(`/app/agents/${agent.id}`); };
 
   return (
     <div>
@@ -352,7 +351,9 @@ export default function Agents() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6 }}>🤖 Agentes</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
+            <Icon name="robot" size={24} color="#8b5cf6" /> Agentes
+          </h1>
           <p style={{ color: "#9992b8", fontSize: 14 }}>Crie e gerencie seus agentes de I.A para WhatsApp</p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -360,39 +361,50 @@ export default function Agents() {
             padding: "11px 20px", background: "rgba(139,92,246,0.08)",
             border: "1px solid rgba(139,92,246,0.25)", borderRadius: 10,
             color: "#a78bfa", fontSize: 14, fontWeight: 700, cursor: "pointer",
-            transition: "all 0.15s",
+            transition: "all 0.15s", display: "flex", alignItems: "center", gap: 8,
           }}
             onMouseEnter={e => { e.currentTarget.style.background = "rgba(139,92,246,0.14)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "rgba(139,92,246,0.08)"; }}
-          >📥 Importar JSON</button>
+          >
+            <Icon name="file-import" size={13} /> Importar JSON
+          </button>
           <button onClick={() => setShowCreate(true)} style={{
             padding: "11px 24px", background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
             border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
-          }}>+ Novo Agente</button>
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <Icon name="plus" size={13} /> Novo Agente
+          </button>
         </div>
       </div>
 
-      {/* Feedback banner */}
       {feedbackMsg && <Banner type={feedbackMsg.type}>{feedbackMsg.text}</Banner>}
 
-      {/* Content */}
       {loading ? (
         <div style={{ textAlign: "center", padding: 60, color: "#9992b8" }}>Carregando agentes...</div>
       ) : agents.length === 0 ? (
         <div style={{ textAlign: "center", padding: "80px 0" }}>
-          <div style={{ fontSize: 56, marginBottom: 16 }}>🤖</div>
+          <div style={{ marginBottom: 16 }}>
+            <Icon name="robot" size={56} color="rgba(139,92,246,0.25)" />
+          </div>
           <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Nenhum agente criado</h2>
           <p style={{ color: "#9992b8", marginBottom: 24 }}>Crie seu primeiro agente ou importe um existente via JSON</p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <button onClick={() => setShowCreate(true)} style={{
               padding: "12px 28px", background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
               border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
-            }}>Criar meu primeiro agente</button>
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <Icon name="plus" size={13} /> Criar meu primeiro agente
+            </button>
             <button onClick={() => setShowImport(true)} style={{
               padding: "12px 28px", background: "rgba(139,92,246,0.08)",
               border: "1px solid rgba(139,92,246,0.25)", borderRadius: 10,
               color: "#a78bfa", fontSize: 14, fontWeight: 700, cursor: "pointer",
-            }}>📥 Importar JSON</button>
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <Icon name="file-import" size={13} /> Importar JSON
+            </button>
           </div>
         </div>
       ) : (
@@ -421,7 +433,6 @@ function AgentCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e: MouseEvent) => {
@@ -432,8 +443,8 @@ function AgentCard({
   }, [menuOpen]);
 
   const statusLabel =
-    agent.whatsapp?.status === "connected" ? "● Conectado" :
-    agent.whatsapp?.status === "qr" ? "⟳ Aguardando QR" : "○ Offline";
+    agent.whatsapp?.status === "connected" ? "Conectado" :
+    agent.whatsapp?.status === "qr" ? "Aguardando QR" : "Offline";
   const statusColor =
     agent.whatsapp?.status === "connected" ? "#8b5cf6" :
     agent.whatsapp?.status === "qr" ? "#fbbf24" : "#9992b8";
@@ -446,37 +457,39 @@ function AgentCard({
       onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(139,92,246,0.3)"; e.currentTarget.style.boxShadow = "0 0 20px rgba(139,92,246,0.05)"; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(139,92,246,0.10)"; e.currentTarget.style.boxShadow = "none"; }}
     >
-      {/* Top row */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(139,92,246,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-          🤖
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(139,92,246,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name="robot" size={22} color="#a78bfa" />
         </div>
-        {/* Action buttons */}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <Link href={`/app/agents/${agent.id}`}>
             <button style={{
               padding: "6px 14px", background: "rgba(139,92,246,0.1)",
               border: "1px solid rgba(139,92,246,0.25)", borderRadius: 6,
               color: "#8b5cf6", fontSize: 12, fontWeight: 700, cursor: "pointer",
-            }}>Editar</button>
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <Icon name="pen" size={10} /> Editar
+            </button>
           </Link>
-          {/* Context menu */}
           <div style={{ position: "relative" }} ref={menuRef}>
             <button onClick={() => setMenuOpen(v => !v)} style={{
               width: 32, height: 32, borderRadius: 6, background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.06)", color: "#9992b8", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
-            }}>⋯</button>
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Icon name="ellipsis" size={14} />
+            </button>
             {menuOpen && (
               <div style={{
                 position: "absolute", right: 0, top: 38, zIndex: 100,
                 background: "#0e0e1a", border: "1px solid rgba(139,92,246,0.18)", borderRadius: 12,
                 minWidth: 180, boxShadow: "0 16px 48px rgba(0,0,0,0.6)", overflow: "hidden",
               }}>
-                <MenuAction icon="📋" label="Duplicar" disabled={duplicating}
+                <MenuAction icon="copy" label="Duplicar" disabled={duplicating}
                   onClick={() => { setMenuOpen(false); onDuplicate(); }} />
                 <div style={{ height: 1, background: "rgba(139,92,246,0.08)", margin: "4px 0" }} />
-                <MenuAction icon="🗑️" label="Excluir" danger
+                <MenuAction icon="trash" label="Excluir" danger
                   onClick={() => { setMenuOpen(false); onDelete(); }} />
               </div>
             )}
@@ -492,22 +505,29 @@ function AgentCard({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{
           padding: "4px 12px", borderRadius: 100, fontSize: 12, fontWeight: 700,
+          display: "flex", alignItems: "center", gap: 6,
           background: statusColor === "#8b5cf6" ? "rgba(139,92,246,0.15)" :
             statusColor === "#fbbf24" ? "rgba(251,191,36,0.12)" : "rgba(255,255,255,0.04)",
           color: statusColor,
-        }}>{statusLabel}</span>
+        }}>
+          {agent.whatsapp?.status === "connected"
+            ? <Icon name="circle-check" size={11} color="#8b5cf6" />
+            : agent.whatsapp?.status === "qr"
+            ? <Icon name="qrcode" size={11} color="#fbbf24" />
+            : <Icon name="circle" size={8} color="#9992b8" />}
+          {statusLabel}
+        </span>
         {agent.whatsapp?.phoneNumber && agent.whatsapp.status === "connected" && (
           <span style={{ fontSize: 11, color: "#9992b8" }}>+{agent.whatsapp.phoneNumber}</span>
         )}
       </div>
 
-      {/* Duplicate overlay */}
       {duplicating && (
         <div style={{
           position: "absolute", inset: 0, borderRadius: 18, background: "rgba(8,8,16,0.85)",
           display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8,
         }}>
-          <div style={{ fontSize: 24 }}>📋</div>
+          <Icon name="spinner" size={24} color="#a78bfa" spin />
           <div style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>Duplicando...</div>
         </div>
       )}
@@ -518,7 +538,7 @@ function AgentCard({
 function MenuAction({
   icon, label, danger = false, disabled = false, onClick,
 }: {
-  icon: string; label: string; danger?: boolean; disabled?: boolean; onClick: () => void;
+  icon: "copy" | "trash"; label: string; danger?: boolean; disabled?: boolean; onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -528,15 +548,15 @@ function MenuAction({
       onMouseLeave={() => setHovered(false)}
       style={{
         display: "flex", alignItems: "center", gap: 10, width: "100%",
-        padding: "10px 14px", background: hovered
-          ? (danger ? "rgba(239,68,68,0.08)" : "rgba(139,92,246,0.07)")
+        padding: "10px 16px", background: hovered
+          ? (danger ? "rgba(239,68,68,0.06)" : "rgba(139,92,246,0.05)")
           : "transparent",
-        border: "none", cursor: disabled ? "not-allowed" : "pointer", textAlign: "left",
-        color: danger ? "#f87171" : "#fff", fontSize: 13, fontWeight: 600,
-        fontFamily: "'Manrope', sans-serif", opacity: disabled ? 0.5 : 1,
-        transition: "background 0.12s",
+        border: "none", color: danger ? "#f87171" : "#d4cfed",
+        fontSize: 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1, transition: "background 0.1s",
       }}>
-      <span>{icon}</span> {label}
+      <Icon name={icon} size={13} color={danger ? "#f87171" : "#9992b8"} />
+      {label}
     </button>
   );
 }

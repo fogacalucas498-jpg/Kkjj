@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { agentsApi, whatsappApi, type Agent } from "../../lib/api";
+import { Icon } from "../../components/Icon";
 
 interface Props { id: string }
 
@@ -132,7 +133,11 @@ export default function AgentDetail({ id }: Props) {
     setAgent(prev => prev ? { ...prev, knowledge: prev.knowledge?.filter(k => k.id !== kid) } : prev);
   };
 
-  if (loading) return <div style={{ color: "#9992b8", padding: 40, textAlign: "center" }}>Carregando...</div>;
+  if (loading) return (
+    <div style={{ color: "#9992b8", padding: 40, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+      <Icon name="spinner" size={18} color="#8b5cf6" spin /> Carregando...
+    </div>
+  );
   if (!agent) return <div style={{ color: "#f87171", padding: 40 }}>Agente não encontrado</div>;
 
   const delaySecs: number = agent.responseDelaySecs ?? 3;
@@ -144,17 +149,19 @@ export default function AgentDetail({ id }: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <button onClick={() => navigate("/app/agents")} style={{
             background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)",
-            borderRadius: 8, color: "#9992b8", fontSize: 18, cursor: "pointer",
+            borderRadius: 8, color: "#9992b8", cursor: "pointer",
             width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>←</button>
+          }}>
+            <Icon name="arrow-left" size={15} />
+          </button>
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 4 }}>{agent.name}</h1>
             <p style={{ color: "#9992b8", fontSize: 14 }}>{agent.description || "Sem descrição"}</p>
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <ActionBtn icon="📤" label={exporting ? "Exportando..." : "Exportar JSON"} disabled={exporting} onClick={handleExport} />
-          <ActionBtn icon="📋" label={duplicating ? "Duplicando..." : "Duplicar"} disabled={duplicating} onClick={handleDuplicate} />
+          <ActionBtn iconName="file-export" label={exporting ? "Exportando..." : "Exportar JSON"} disabled={exporting} loading={exporting} onClick={handleExport} />
+          <ActionBtn iconName="copy" label={duplicating ? "Duplicando..." : "Duplicar"} disabled={duplicating} loading={duplicating} onClick={handleDuplicate} />
         </div>
       </div>
 
@@ -165,8 +172,14 @@ export default function AgentDetail({ id }: Props) {
           background: actionMsg.type === "success" ? "rgba(139,92,246,0.08)" : "rgba(239,68,68,0.08)",
           border: `1px solid ${actionMsg.type === "success" ? "rgba(139,92,246,0.3)" : "rgba(239,68,68,0.3)"}`,
           color: actionMsg.type === "success" ? "#a78bfa" : "#fca5a5",
+          display: "flex", alignItems: "center", gap: 8,
         }}>
-          {actionMsg.type === "success" ? "✓ " : "⚠️ "}{actionMsg.text}
+          <Icon
+            name={actionMsg.type === "success" ? "circle-check" : "triangle-exclamation"}
+            size={13}
+            color={actionMsg.type === "success" ? "#a78bfa" : "#fca5a5"}
+          />
+          {actionMsg.text}
         </div>
       )}
 
@@ -177,10 +190,10 @@ export default function AgentDetail({ id }: Props) {
         border: "1px solid rgba(139,92,246,0.10)",
       }}>
         {([
-          ["info", "📝 Informações"],
-          ["knowledge", "📚 Conhecimento"],
-          ["whatsapp", "📱 WhatsApp"],
-        ] as const).map(([t, l]) => (
+          ["info",      "Informações",  "pen"],
+          ["knowledge", "Conhecimento", "book"],
+          ["whatsapp",  "WhatsApp",     "whatsapp"],
+        ] as const).map(([t, l, ic]) => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: "8px 18px", borderRadius: 8, border: "none", fontSize: 13,
             fontWeight: 700, cursor: "pointer",
@@ -188,7 +201,11 @@ export default function AgentDetail({ id }: Props) {
             color: tab === t ? "#ffffff" : "#9992b8",
             boxShadow: tab === t ? "0 2px 8px rgba(139,92,246,0.3)" : "none",
             transition: "all 0.15s",
-          }}>{l}</button>
+            display: "flex", alignItems: "center", gap: 7,
+          }}>
+            <Icon name={ic} size={13} color={tab === t ? "#fff" : "#9992b8"} />
+            {l}
+          </button>
         ))}
       </div>
 
@@ -222,7 +239,7 @@ export default function AgentDetail({ id }: Props) {
             </Field>
 
             {/* ── Typing delay ── */}
-            <Field label="⏱️ Delay de Digitação (segundos)">
+            <Field label="Delay de Digitação (segundos)">
               <p style={{ fontSize: 12, color: "#9992b8", marginBottom: 12, lineHeight: 1.5 }}>
                 Tempo que o robô ficará com <strong style={{ color: "#a78bfa" }}>digitando...</strong> antes de enviar a resposta. Deixa mais natural.
               </p>
@@ -230,7 +247,7 @@ export default function AgentDetail({ id }: Props) {
                 <input
                   type="range" min={1} max={30} step={1}
                   value={delaySecs}
-                  onChange={e => setAgent({ ...agent, responseDelaySecs: Number(e.target.value) } as any)}
+                  onChange={e => setAgent({ ...agent, responseDelaySecs: Number(e.target.value) })}
                   style={{ flex: 1, accentColor: "#8b5cf6", cursor: "pointer" }}
                 />
                 <div style={{
@@ -245,8 +262,6 @@ export default function AgentDetail({ id }: Props) {
                 <span>1s (rápido)</span>
                 <span>30s (lento)</span>
               </div>
-
-              {/* Visual preview */}
               <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 10, background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.10)", fontSize: 13 }}>
                 <span style={{ color: "#9992b8" }}>Preview: </span>
                 <span style={{ color: "#a78bfa" }}>digitando por {delaySecs} segundo{delaySecs !== 1 ? "s" : ""}</span>
@@ -254,21 +269,21 @@ export default function AgentDetail({ id }: Props) {
               </div>
             </Field>
 
-            {/* Save status */}
             {saveStatus === "saved" && (
-              <div style={{ padding: "10px 14px", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 8, color: "#a78bfa", fontSize: 14, marginBottom: 16 }}>
-                ✓ Alterações salvas com sucesso!
+              <div style={{ padding: "10px 14px", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 8, color: "#a78bfa", fontSize: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                <Icon name="circle-check" size={13} color="#a78bfa" /> Alterações salvas com sucesso!
               </div>
             )}
             {saveStatus === "error" && (
-              <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, color: "#fca5a5", fontSize: 14, marginBottom: 16 }}>
+              <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, color: "#fca5a5", fontSize: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                <Icon name="triangle-exclamation" size={13} color="#fca5a5" />
                 {!agent.name.trim() ? "O nome do agente é obrigatório." : "Erro ao salvar. Tente novamente."}
               </div>
             )}
 
             <button onClick={handleSave} disabled={saving}
-              style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}>
-              {saving ? "Salvando..." : "💾 Salvar alterações"}
+              style={{ ...btnPrimary, opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", gap: 8 }}>
+              {saving ? <><Icon name="spinner" size={13} spin /> Salvando...</> : <><Icon name="floppy-disk" size={13} /> Salvar alterações</>}
             </button>
           </Card>
         </div>
@@ -281,8 +296,8 @@ export default function AgentDetail({ id }: Props) {
             <p style={{ color: "#9992b8", fontSize: 14 }}>
               Adicione documentos, FAQs e textos para treinar seu agente.
             </p>
-            <button onClick={() => { setAddingK(true); setKError(""); }} style={btnPrimary}>
-              + Adicionar
+            <button onClick={() => { setAddingK(true); setKError(""); }} style={{ ...btnPrimary, display: "flex", alignItems: "center", gap: 7 }}>
+              <Icon name="plus" size={12} /> Adicionar
             </button>
           </div>
 
@@ -298,10 +313,16 @@ export default function AgentDetail({ id }: Props) {
                     placeholder="Cole o texto, FAQ, ou informações que o agente deve conhecer..."
                     rows={6} style={{ ...inputStyle, resize: "vertical" }} />
                 </Field>
-                {kError && <p style={{ color: "#fca5a5", fontSize: 13, marginBottom: 12 }}>⚠️ {kError}</p>}
+                {kError && (
+                  <p style={{ color: "#fca5a5", fontSize: 13, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Icon name="triangle-exclamation" size={12} color="#fca5a5" /> {kError}
+                  </p>
+                )}
                 <div style={{ display: "flex", gap: 10 }}>
                   <button type="button" onClick={() => { setAddingK(false); setKError(""); }} style={btnGhost}>Cancelar</button>
-                  <button type="submit" style={btnPrimary}>Salvar documento</button>
+                  <button type="submit" style={{ ...btnPrimary, display: "flex", alignItems: "center", gap: 7 }}>
+                    <Icon name="floppy-disk" size={12} /> Salvar documento
+                  </button>
                 </div>
               </form>
             </Card>
@@ -309,9 +330,13 @@ export default function AgentDetail({ id }: Props) {
 
           {(agent.knowledge ?? []).length === 0 && !addingK ? (
             <div style={{ textAlign: "center", padding: "60px 0" }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
+              <div style={{ marginBottom: 16 }}>
+                <Icon name="book" size={48} color="rgba(139,92,246,0.25)" />
+              </div>
               <p style={{ color: "#9992b8", marginBottom: 20 }}>Nenhum documento adicionado ainda</p>
-              <button onClick={() => setAddingK(true)} style={btnPrimary}>+ Adicionar primeiro documento</button>
+              <button onClick={() => setAddingK(true)} style={{ ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 7 }}>
+                <Icon name="plus" size={12} /> Adicionar primeiro documento
+              </button>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -328,7 +353,10 @@ export default function AgentDetail({ id }: Props) {
                       marginLeft: 16, padding: "5px 12px",
                       background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
                       borderRadius: 6, color: "#f87171", fontSize: 12, cursor: "pointer", flexShrink: 0,
-                    }}>Excluir</button>
+                      display: "flex", alignItems: "center", gap: 5,
+                    }}>
+                      <Icon name="trash" size={11} color="#f87171" /> Excluir
+                    </button>
                   </div>
                 </Card>
               ))}
@@ -341,7 +369,9 @@ export default function AgentDetail({ id }: Props) {
       {tab === "whatsapp" && (
         <div style={{ maxWidth: 520 }}>
           <Card>
-            <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>📱 Conectar WhatsApp</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+              <Icon name="whatsapp" size={20} color="#25D366" /> Conectar WhatsApp
+            </h2>
             <p style={{ color: "#9992b8", fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
               Conecte um número de WhatsApp a este agente. Ao receber mensagens, o agente responderá automaticamente com I.A e ficará
               {" "}<strong style={{ color: "#a78bfa" }}>digitando por {delaySecs}s</strong> antes de enviar.
@@ -360,12 +390,12 @@ export default function AgentDetail({ id }: Props) {
                 }} />
                 <span style={{ fontSize: 14, fontWeight: 700 }}>
                   {whatsappStatus.status === "connected"
-                    ? `✅ Conectado — +${whatsappStatus.phoneNumber}`
+                    ? `Conectado — +${whatsappStatus.phoneNumber}`
                     : whatsappStatus.status === "qr"
-                    ? "📱 Escaneie o QR Code abaixo"
+                    ? "Escaneie o QR Code abaixo"
                     : whatsappStatus.status === "connecting"
-                    ? "⟳ Conectando ao WhatsApp..."
-                    : "○ Desconectado"}
+                    ? "Conectando ao WhatsApp..."
+                    : "Desconectado"}
                 </span>
               </div>
             </div>
@@ -384,8 +414,8 @@ export default function AgentDetail({ id }: Props) {
                 }}>
                   <img src={whatsappStatus.qr} alt="QR Code WhatsApp" style={{ width: 240, height: 240, display: "block" }} />
                 </div>
-                <p style={{ color: "#fbbf24", fontSize: 12, marginTop: 14 }}>
-                  ⟳ QR Code atualizado automaticamente a cada 60 segundos
+                <p style={{ color: "#fbbf24", fontSize: 12, marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <Icon name="arrows-rotate" size={11} color="#fbbf24" /> QR Code atualizado automaticamente a cada 60 segundos
                 </p>
               </div>
             )}
@@ -402,19 +432,21 @@ export default function AgentDetail({ id }: Props) {
                 style={{
                   ...btnPrimary, width: "100%",
                   opacity: (connecting || whatsappStatus.status === "connecting" || whatsappStatus.status === "qr") ? 0.7 : 1,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                 }}>
                 {connecting || whatsappStatus.status === "connecting"
-                  ? "⟳ Conectando..."
+                  ? <><Icon name="spinner" size={14} spin /> Conectando...</>
                   : whatsappStatus.status === "qr"
-                  ? "⟳ Aguardando escanear..."
-                  : "📱 Conectar WhatsApp"}
+                  ? <><Icon name="qrcode" size={14} /> Aguardando escanear...</>
+                  : <><Icon name="whatsapp" size={14} /> Conectar WhatsApp</>}
               </button>
             )}
 
             {/* Tip */}
-            <div style={{ marginTop: 20, padding: 14, borderRadius: 10, background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.1)" }}>
+            <div style={{ marginTop: 20, padding: 14, borderRadius: 10, background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.1)", display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <Icon name="lightbulb" size={14} color="#8b5cf6" style={{ marginTop: 1, flexShrink: 0 }} />
               <p style={{ fontSize: 13, color: "#9992b8", lineHeight: 1.7, margin: 0 }}>
-                💡 Configure sua chave OpenAI em{" "}
+                Configure sua chave OpenAI em{" "}
                 <strong style={{ color: "#8b5cf6" }}>Configurações</strong>{" "}
                 para ativar as respostas com I.A.
               </p>
@@ -428,19 +460,22 @@ export default function AgentDetail({ id }: Props) {
 
 /* ── Sub-components ── */
 
-function ActionBtn({ icon, label, disabled, onClick }: { icon: string; label: string; disabled: boolean; onClick: () => void }) {
+function ActionBtn({ iconName, label, disabled, loading: isLoading, onClick }: {
+  iconName: "file-export" | "copy"; label: string; disabled: boolean; loading?: boolean; onClick: () => void;
+}) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       padding: "9px 18px", background: "rgba(139,92,246,0.08)",
       border: "1px solid rgba(139,92,246,0.22)", borderRadius: 9,
       color: "#a78bfa", fontSize: 13, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer",
       opacity: disabled ? 0.7 : 1, transition: "all 0.15s",
-      display: "flex", alignItems: "center", gap: 6,
+      display: "flex", alignItems: "center", gap: 7,
     }}
       onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = "rgba(139,92,246,0.14)"; }}
       onMouseLeave={e => { e.currentTarget.style.background = "rgba(139,92,246,0.08)"; }}
     >
-      {icon} {label}
+      {isLoading ? <Icon name="spinner" size={13} spin /> : <Icon name={iconName} size={13} />}
+      {label}
     </button>
   );
 }

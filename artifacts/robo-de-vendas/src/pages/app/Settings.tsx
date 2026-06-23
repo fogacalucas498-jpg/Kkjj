@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { authApi } from "../../lib/api";
 import { useAuth } from "../../contexts/auth";
+import { Icon } from "../../components/Icon";
 
 export default function Settings() {
   const { user } = useAuth();
@@ -47,14 +48,18 @@ export default function Settings() {
   return (
     <div>
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6 }}>⚙️ Configurações</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
+          <Icon name="gear" size={24} color="#8b5cf6" /> Configurações
+        </h1>
         <p style={{ color: "#9992b8", fontSize: 14 }}>Configurações da plataforma</p>
       </div>
 
       <div style={{ maxWidth: 560 }}>
         {/* Account info */}
         <div style={{ background: "#080810", border: "1px solid rgba(139,92,246,0.10)", borderRadius: 16, padding: 32, marginBottom: 20 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 800, marginBottom: 20 }}>👤 Minha Conta</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 800, marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+            <Icon name="user" size={16} color="#a78bfa" /> Minha Conta
+          </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
               <label style={labelStyle}>Nome</label>
@@ -69,14 +74,16 @@ export default function Settings() {
 
         {/* OpenAI key */}
         <div style={{ background: "#080810", border: "1px solid rgba(139,92,246,0.10)", borderRadius: 16, padding: 32, marginBottom: 20 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 800, marginBottom: 8 }}>🤖 Inteligência Artificial</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 800, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <Icon name="robot" size={16} color="#a78bfa" /> Inteligência Artificial
+          </h2>
           <p style={{ color: "#9992b8", fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>
             Configure sua chave da API OpenAI para que os agentes respondam automaticamente às mensagens do WhatsApp.
           </p>
 
           {hasKey && (
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.2)", borderRadius: 10, marginBottom: 20 }}>
-              <span style={{ fontSize: 18 }}>✅</span>
+              <Icon name="circle-check" size={20} color="#a78bfa" />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Chave OpenAI configurada</div>
                 <div style={{ fontSize: 12, color: "#9992b8" }}>Seus agentes estão com IA ativada</div>
@@ -98,8 +105,12 @@ export default function Settings() {
                   placeholder="sk-proj-..."
                   style={{ ...inputStyle, paddingRight: 48 }}
                 />
-                <button type="button" onClick={() => setShowKey(v => !v)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#9992b8", cursor: "pointer", fontSize: 16 }}>
-                  {showKey ? "🙈" : "👁"}
+                <button type="button" onClick={() => setShowKey(v => !v)} style={{
+                  position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", color: "#9992b8", cursor: "pointer",
+                  display: "flex", alignItems: "center",
+                }}>
+                  <Icon name={showKey ? "eye-slash" : "eye"} size={16} color="#9992b8" />
                 </button>
               </div>
               <p style={{ fontSize: 12, color: "#9992b8", marginTop: 8 }}>
@@ -108,13 +119,13 @@ export default function Settings() {
             </div>
 
             {status === "saved" && (
-              <div style={{ padding: "10px 14px", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 8, color: "#a78bfa", fontSize: 14, marginBottom: 16 }}>
-                ✓ Chave salva com sucesso!
+              <div style={{ padding: "10px 14px", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 8, color: "#a78bfa", fontSize: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                <Icon name="check" size={13} color="#a78bfa" /> Chave salva com sucesso!
               </div>
             )}
             {status === "error" && (
-              <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, color: "#fca5a5", fontSize: 14, marginBottom: 16 }}>
-                Erro ao salvar. Tente novamente.
+              <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, color: "#fca5a5", fontSize: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                <Icon name="triangle-exclamation" size={13} color="#fca5a5" /> Erro ao salvar. Tente novamente.
               </div>
             )}
 
@@ -123,23 +134,25 @@ export default function Settings() {
               background: (!apiKey.trim()) ? "rgba(139,92,246,0.2)" : "linear-gradient(135deg, #8b5cf6, #7c3aed)",
               border: "none", borderRadius: 8, color: (!apiKey.trim()) ? "#9992b8" : "#fff",
               fontSize: 14, fontWeight: 700, cursor: apiKey.trim() ? "pointer" : "not-allowed",
-              opacity: saving ? 0.7 : 1,
+              opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", gap: 8,
             }}>
-              {saving ? "Salvando..." : hasKey ? "Atualizar chave" : "Salvar chave"}
+              {saving ? <><Icon name="spinner" size={13} spin /> Salvando...</> : hasKey ? "Atualizar chave" : "Salvar chave"}
             </button>
           </form>
         </div>
 
         {/* Plan */}
         <div style={{ background: "#080810", border: "1px solid rgba(139,92,246,0.10)", borderRadius: 16, padding: 32 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 800, marginBottom: 8 }}>✨ Plano atual: GRÁTIS</h2>
+          <h2 style={{ fontSize: 17, fontWeight: 800, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <Icon name="star" size={15} color="#a78bfa" /> Plano atual: GRÁTIS
+          </h2>
           <p style={{ color: "#9992b8", fontSize: 14, lineHeight: 1.7 }}>
             Você está no plano gratuito com acesso completo à plataforma Robô de Vendas - Networking VIP.
           </p>
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
             {["Agentes ilimitados", "Conexão WhatsApp", "Respostas com I.A", "Base de conhecimento", "Histórico de conversas"].map(f => (
               <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "#d4cfed" }}>
-                <span style={{ color: "#8b5cf6", fontWeight: 700 }}>✓</span> {f}
+                <Icon name="check" size={12} color="#8b5cf6" /> {f}
               </div>
             ))}
           </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { conversationsApi, type Conversation } from "../../lib/api";
+import { Icon } from "../../components/Icon";
 
 export default function Conversations() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -18,18 +19,21 @@ export default function Conversations() {
   return (
     <div>
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6 }}>💬 Conversas</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
+          <Icon name="comments" size={24} color="#8b5cf6" /> Conversas
+        </h1>
         <p style={{ color: "#9992b8", fontSize: 14 }}>Todas as conversas dos seus agentes no WhatsApp</p>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 20, position: "relative", display: "inline-flex", alignItems: "center" }}>
+        <Icon name="magnifying-glass" size={14} color="#9992b8" style={{ position: "absolute", left: 14, pointerEvents: "none" }} />
         <input
           value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="🔍 Buscar por nome ou número..."
+          placeholder="Buscar por nome ou número..."
           style={{
-            width: 340, padding: "10px 14px", background: "#080810",
+            width: 340, padding: "10px 14px 10px 38px", background: "#080810",
             border: "1px solid rgba(139,92,246,0.12)", borderRadius: 10,
-            color: "#ffffff", fontSize: 14, outline: "none"
+            color: "#ffffff", fontSize: 14, outline: "none",
           }}
         />
       </div>
@@ -38,7 +42,9 @@ export default function Conversations() {
         <div style={{ textAlign: "center", padding: 60, color: "#9992b8" }}>Carregando conversas...</div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "80px 0" }}>
-          <div style={{ fontSize: 56, marginBottom: 16 }}>💬</div>
+          <div style={{ marginBottom: 16 }}>
+            <Icon name="comments" size={56} color="rgba(139,92,246,0.25)" />
+          </div>
           <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Nenhuma conversa ainda</h2>
           <p style={{ color: "#9992b8", marginBottom: 8 }}>Conecte um agente ao WhatsApp para começar a receber mensagens</p>
           <Link href="/app/agents">
@@ -62,8 +68,10 @@ export default function Conversations() {
                 <div style={{
                   width: 44, height: 44, borderRadius: "50%",
                   background: "rgba(139,92,246,0.12)", display: "flex", alignItems: "center",
-                  justifyContent: "center", fontSize: 20, flexShrink: 0,
-                }}>👤</div>
+                  justifyContent: "center", flexShrink: 0,
+                }}>
+                  <Icon name="user" size={20} color="#a78bfa" />
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
                     {c.contactName || c.contactPhone}
@@ -72,12 +80,13 @@ export default function Conversations() {
                     {c.lastMessage || "Nenhuma mensagem"}
                   </div>
                 </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                   <div style={{ fontSize: 12, color: "#9992b8" }}>
                     {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleDateString("pt-BR") : ""}
                   </div>
-                  <div style={{ fontSize: 11, color: "#9992b8", marginTop: 4 }}>+{c.contactPhone}</div>
+                  <div style={{ fontSize: 11, color: "#9992b8" }}>+{c.contactPhone}</div>
                 </div>
+                <Icon name="chevron-right" size={12} color="rgba(139,92,246,0.3)" style={{ flexShrink: 0 }} />
               </div>
             </Link>
           ))}

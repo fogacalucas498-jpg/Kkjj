@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/auth";
 import { authApi } from "../../lib/api";
+import { Icon } from "../../components/Icon";
 
 type Section = "info" | "password" | "ai";
 
@@ -12,14 +13,12 @@ export default function Profile() {
   const { user, updateUser } = useAuth();
   const [section, setSection] = useState<Section>("info");
 
-  // Info form
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [infoPassword, setInfoPassword] = useState("");
   const [infoStatus, setInfoStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [infoError, setInfoError] = useState("");
 
-  // Password form
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -27,7 +26,6 @@ export default function Profile() {
   const [pwdError, setPwdError] = useState("");
   const [showPwds, setShowPwds] = useState(false);
 
-  // AI key form
   const [apiKey, setApiKey] = useState("");
   const [hasKey, setHasKey] = useState(false);
   const [memberSince, setMemberSince] = useState<string | null>(null);
@@ -107,16 +105,18 @@ export default function Profile() {
     } catch { setKeyStatus("error"); }
   };
 
-  const tabs: { id: Section; label: string; icon: string }[] = [
-    { id: "info", label: "Dados Pessoais", icon: "👤" },
-    { id: "password", label: "Senha", icon: "🔒" },
-    { id: "ai", label: "IA & API", icon: "🤖" },
+  const tabs: { id: Section; label: string; iconName: "user" | "lock" | "robot" }[] = [
+    { id: "info",     label: "Dados Pessoais", iconName: "user" },
+    { id: "password", label: "Senha",          iconName: "lock" },
+    { id: "ai",       label: "IA & API",       iconName: "robot" },
   ];
 
   return (
     <div>
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6 }}>👤 Meu Perfil</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
+          <Icon name="user" size={22} color="#8b5cf6" /> Meu Perfil
+        </h1>
         <p style={{ color: "#9992b8", fontSize: 14 }}>Gerencie seus dados pessoais e configurações da conta</p>
       </div>
 
@@ -140,8 +140,8 @@ export default function Profile() {
             </div>
           )}
         </div>
-        <div style={{ padding: "6px 16px", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 100, fontSize: 12, fontWeight: 700, color: "#8b5cf6", flexShrink: 0 }}>
-          ✨ Plano Grátis
+        <div style={{ padding: "6px 16px", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 100, fontSize: 12, fontWeight: 700, color: "#8b5cf6", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          <Icon name="star" size={11} color="#8b5cf6" /> Plano Grátis
         </div>
       </div>
 
@@ -155,13 +155,13 @@ export default function Profile() {
             boxShadow: section === t.id ? "0 2px 12px rgba(139,92,246,0.3)" : "none",
             transition: "all 0.15s", display: "flex", alignItems: "center", gap: 7,
           }}>
-            <span>{t.icon}</span> {t.label}
+            <Icon name={t.iconName} size={13} color={section === t.id ? "#fff" : "#9992b8"} />
+            {t.label}
           </button>
         ))}
       </div>
 
       <div style={{ maxWidth: 560 }}>
-
         {/* ── Dados Pessoais ── */}
         {section === "info" && (
           <Card>
@@ -179,8 +179,8 @@ export default function Profile() {
                 </Field>
               )}
               <StatusBanner status={infoStatus} error={infoError} savedMsg="Dados atualizados com sucesso!" />
-              <button type="submit" disabled={infoStatus === "saving"} style={{ ...btnPrimary, opacity: infoStatus === "saving" ? 0.7 : 1 }}>
-                {infoStatus === "saving" ? "Salvando..." : "Salvar alterações"}
+              <button type="submit" disabled={infoStatus === "saving"} style={{ ...btnPrimary, opacity: infoStatus === "saving" ? 0.7 : 1, display: "flex", alignItems: "center", gap: 8 }}>
+                {infoStatus === "saving" ? <><Icon name="spinner" size={13} spin /> Salvando...</> : "Salvar alterações"}
               </button>
             </form>
           </Card>
@@ -209,12 +209,15 @@ export default function Profile() {
                   <EyeBtn show={showPwds} toggle={() => setShowPwds(v => !v)} />
                 </div>
                 {newPwd && confirmPwd && newPwd !== confirmPwd && (
-                  <p style={{ fontSize: 12, color: "#f87171", marginTop: 4 }}>As senhas não coincidem</p>
+                  <p style={{ fontSize: 12, color: "#f87171", marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
+                    <Icon name="triangle-exclamation" size={11} color="#f87171" /> As senhas não coincidem
+                  </p>
                 )}
               </Field>
               <StatusBanner status={pwdStatus} error={pwdError} savedMsg="Senha alterada com sucesso!" />
-              <button type="submit" disabled={pwdStatus === "saving" || !currentPwd || !newPwd || !confirmPwd} style={{ ...btnPrimary, opacity: (pwdStatus === "saving" || !currentPwd || !newPwd || !confirmPwd) ? 0.6 : 1 }}>
-                {pwdStatus === "saving" ? "Alterando..." : "Alterar senha"}
+              <button type="submit" disabled={pwdStatus === "saving" || !currentPwd || !newPwd || !confirmPwd}
+                style={{ ...btnPrimary, opacity: (pwdStatus === "saving" || !currentPwd || !newPwd || !confirmPwd) ? 0.6 : 1, display: "flex", alignItems: "center", gap: 8 }}>
+                {pwdStatus === "saving" ? <><Icon name="spinner" size={13} spin /> Alterando...</> : "Alterar senha"}
               </button>
             </form>
           </Card>
@@ -230,7 +233,7 @@ export default function Profile() {
 
             {hasKey && (
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.2)", borderRadius: 12, marginBottom: 24 }}>
-                <span style={{ fontSize: 20 }}>✅</span>
+                <Icon name="circle-check" size={20} color="#a78bfa" />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>Chave OpenAI configurada</div>
                   <div style={{ fontSize: 12, color: "#9992b8" }}>Seus agentes estão com IA ativada</div>
@@ -254,8 +257,9 @@ export default function Profile() {
                 </p>
               </Field>
               <StatusBanner status={keyStatus} error="" savedMsg={hasKey ? "Chave atualizada com sucesso!" : "Chave salva com sucesso!"} />
-              <button type="submit" disabled={keyStatus === "saving" || !apiKey.trim()} style={{ ...btnPrimary, opacity: (!apiKey.trim() || keyStatus === "saving") ? 0.6 : 1, cursor: apiKey.trim() ? "pointer" : "not-allowed" }}>
-                {keyStatus === "saving" ? "Salvando..." : hasKey ? "Atualizar chave" : "Salvar chave"}
+              <button type="submit" disabled={keyStatus === "saving" || !apiKey.trim()}
+                style={{ ...btnPrimary, opacity: (!apiKey.trim() || keyStatus === "saving") ? 0.6 : 1, cursor: apiKey.trim() ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: 8 }}>
+                {keyStatus === "saving" ? <><Icon name="spinner" size={13} spin /> Salvando...</> : hasKey ? "Atualizar chave" : "Salvar chave"}
               </button>
             </form>
           </Card>
@@ -284,21 +288,25 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function EyeBtn({ show, toggle }: { show: boolean; toggle: () => void }) {
   return (
-    <button type="button" onClick={toggle} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#9992b8", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>
-      {show ? "🙈" : "👁"}
+    <button type="button" onClick={toggle} style={{
+      position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+      background: "none", border: "none", color: "#9992b8", cursor: "pointer",
+      display: "flex", alignItems: "center",
+    }}>
+      <Icon name={show ? "eye-slash" : "eye"} size={16} color="#9992b8" />
     </button>
   );
 }
 
 function StatusBanner({ status, error, savedMsg }: { status: string; error: string; savedMsg: string }) {
   if (status === "saved") return (
-    <div style={{ padding: "10px 14px", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 8, color: "#a78bfa", fontSize: 14, marginBottom: 18 }}>
-      ✓ {savedMsg}
+    <div style={{ padding: "10px 14px", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.3)", borderRadius: 8, color: "#a78bfa", fontSize: 14, marginBottom: 18, display: "flex", alignItems: "center", gap: 8 }}>
+      <Icon name="circle-check" size={13} color="#a78bfa" /> {savedMsg}
     </div>
   );
   if (status === "error" && error) return (
-    <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, color: "#fca5a5", fontSize: 14, marginBottom: 18 }}>
-      ⚠️ {error}
+    <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, color: "#fca5a5", fontSize: 14, marginBottom: 18, display: "flex", alignItems: "center", gap: 8 }}>
+      <Icon name="triangle-exclamation" size={13} color="#fca5a5" /> {error}
     </div>
   );
   return null;
