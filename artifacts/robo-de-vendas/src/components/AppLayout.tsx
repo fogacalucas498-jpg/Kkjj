@@ -1,15 +1,9 @@
 import { type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../contexts/auth";
+import { useNotifications } from "../hooks/useNotifications";
 
 const BASE = import.meta.env.BASE_URL;
-
-const navItems = [
-  { href: "/app", label: "Dashboard", icon: "📊" },
-  { href: "/app/agents", label: "Agentes", icon: "🤖" },
-  { href: "/app/conversations", label: "Conversas", icon: "💬" },
-  { href: "/app/settings", label: "Configurações", icon: "⚙️" },
-];
 
 function getInitials(name: string) {
   return name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase();
@@ -23,9 +17,48 @@ function isActive(location: string, href: string) {
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
+  const { unreadCount, lastNotif } = useNotifications();
+
+  const navItems = [
+    { href: "/app", label: "Dashboard", icon: "📊" },
+    { href: "/app/agents", label: "Agentes", icon: "🤖" },
+    {
+      href: "/app/conversations",
+      label: "Conversas",
+      icon: "💬",
+      badge: unreadCount > 0 ? unreadCount : null,
+    },
+    { href: "/app/settings", label: "Configurações", icon: "⚙️" },
+  ];
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#000000", color: "#ffffff", fontFamily: "'Manrope', sans-serif" }}>
+
+      {/* Toast notification */}
+      {lastNotif && (
+        <style>{`
+          @keyframes slideIn {
+            from { transform: translateX(120%); opacity: 0; }
+            to   { transform: translateX(0);    opacity: 1; }
+          }
+          @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50%       { transform: scale(1.3); }
+          }
+        `}</style>
+      )}
+
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(120%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+        @keyframes badgePulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(139,92,246,0.6); }
+          50%       { transform: scale(1.25); box-shadow: 0 0 0 6px rgba(139,92,246,0); }
+        }
+      `}</style>
+
       {/* Sidebar */}
       <aside style={{
         width: 240, flexShrink: 0, background: "#080810",
@@ -49,6 +82,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <nav style={{ flex: 1, padding: "14px 10px", overflowY: "auto" }}>
           {navItems.map(item => {
             const active = isActive(location, item.href);
+            const hasBadge = "badge" in item && item.badge !== null && item.badge !== undefined;
             return (
               <Link key={item.href} href={item.href}>
                 <div style={{
@@ -64,7 +98,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
                 >
                   <span style={{ fontSize: 17 }}>{item.icon}</span>
-                  {item.label}
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {hasBadge && (
+                    <span style={{
+                      minWidth: 20, height: 20, borderRadius: 10,
+                      background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+                      color: "#fff", fontSize: 11, fontWeight: 800,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      padding: "0 5px",
+                      animation: "badgePulse 1.5s ease-in-out 3",
+                    }}>
+                      {item.badge! > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
                 </div>
               </Link>
             );
@@ -119,6 +165,38 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <main style={{ flex: 1, overflow: "auto", padding: 32 }}>
         {children}
       </main>
+
+      {/* Toast for new WhatsApp messages */}
+      <Toast notif={lastNotif} />
+    </div>
+  );
+}
+
+function Toast({ notif }: { notif: { contactName: string; text: string } | null }) {
+  if (!notif) return null;
+  return (
+    <div key={notif.contactName + notif.text} style={{
+      position: "fixed", bottom: 24, right: 24, zIndex: 9999,
+      background: "#080810", border: "1px solid rgba(139,92,246,0.3)",
+      borderRadius: 14, padding: "14px 18px", maxWidth: 320,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+      animation: "slideIn 0.35s cubic-bezier(0.34,1.56,0.64,1)",
+      display: "flex", gap: 12, alignItems: "flex-start",
+    }}>
+      <div style={{
+        width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
+        background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 18,
+      }}>💬</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#ffffff", marginBottom: 3 }}>
+          Nova mensagem — {notif.contactName}
+        </div>
+        <div style={{ fontSize: 12, color: "#9992b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {notif.text}
+        </div>
+      </div>
     </div>
   );
 }

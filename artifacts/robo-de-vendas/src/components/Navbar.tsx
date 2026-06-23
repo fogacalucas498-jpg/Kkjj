@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
 
+const BASE = import.meta.env.BASE_URL;
+
+function navigate(path: string) {
+  window.location.href = BASE.endsWith("/") ? `${BASE}${path.replace(/^\//, "")}` : `${BASE}${path}`;
+}
+
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
 
@@ -15,7 +21,7 @@ export default function Navbar() {
         <div className="navbar-inner">
           <a href="#" className="navbar-logo">
             <img
-              src={`${import.meta.env.BASE_URL}images/logo.jpg`}
+              src={`${BASE}images/logo.jpg`}
               alt="Robô de Vendas - Networking VIP"
               style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(139,92,246,0.5)", flexShrink: 0 }}
             />
@@ -29,8 +35,8 @@ export default function Navbar() {
           </nav>
 
           <div className="navbar-actions">
-            <button className="btn-ghost">Acessar</button>
-            <button className="btn-primary">TESTE GRÁTIS</button>
+            <button className="btn-ghost" onClick={() => navigate("/login")}>Acessar</button>
+            <button className="btn-primary" onClick={() => navigate("/register")}>TESTE GRÁTIS</button>
           </div>
         </div>
       </div>

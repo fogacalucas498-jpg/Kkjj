@@ -1,6 +1,10 @@
-export default function Hero() {
-  const BASE = import.meta.env.BASE_URL;
+const BASE = import.meta.env.BASE_URL;
 
+function navigate(path: string) {
+  window.location.href = BASE.endsWith("/") ? `${BASE}${path.replace(/^\//, "")}` : `${BASE}${path}`;
+}
+
+export default function Hero() {
   return (
     <section className="hero">
       <div className="container">
@@ -20,8 +24,8 @@ export default function Hero() {
         </p>
 
         <div className="hero-actions">
-          <button className="btn-primary btn-large">Cadastre-se Agora</button>
-          <button className="btn-ghost btn-large">Entrar na Lista</button>
+          <button className="btn-primary btn-large" onClick={() => navigate("/register")}>Cadastre-se Agora</button>
+          <button className="btn-ghost btn-large" onClick={() => navigate("/register")}>Entrar na Lista</button>
         </div>
 
         <p className="hero-note">✓ Sem cartão de crédito &nbsp;·&nbsp; ✓ Grátis para sempre &nbsp;·&nbsp; ✓ Comece em minutos</p>

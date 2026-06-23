@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { db, whatsappSessionsTable, conversationsTable, messagesTable, agentsTable, knowledgeTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
+import { sseEmit } from "./sse-bus";
 
 interface SessionState {
   status: "connecting" | "qr" | "connected" | "disconnected";
@@ -115,11 +116,16 @@ class WhatsAppManager extends EventEmitter {
             .where(eq(whatsappSessionsTable.agentId, agentId)).limit(1);
           if (!session) continue;
 
+          const [agent] = await db.select({ userId: agentsTable.userId })
+            .from(agentsTable).where(eq(agentsTable.id, agentId)).limit(1);
+
           let [conv] = await db.select().from(conversationsTable)
             .where(and(
               eq(conversationsTable.contactPhone, contactPhone),
               eq(conversationsTable.sessionId, session.id)
             )).limit(1);
+
+          const isNew = !conv;
 
           if (!conv) {
             [conv] = await db.insert(conversationsTable).values({
@@ -131,6 +137,18 @@ class WhatsAppManager extends EventEmitter {
           }
 
           await db.insert(messagesTable).values({ conversationId: conv!.id, content: text, role: "user" });
+
+          if (agent?.userId) {
+            sseEmit(agent.userId, {
+              type: "new_message",
+              conversationId: conv!.id,
+              contactName,
+              contactPhone,
+              text: text.length > 60 ? text.slice(0, 60) + "…" : text,
+              isNew,
+              agentId,
+            });
+          }
 
           const aiReply = await this.generateReply(agentId, conv!.id, text);
           if (aiReply) {

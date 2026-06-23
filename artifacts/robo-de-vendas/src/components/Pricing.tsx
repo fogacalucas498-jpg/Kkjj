@@ -1,3 +1,9 @@
+const BASE = import.meta.env.BASE_URL;
+
+function navigate(path: string) {
+  window.location.href = BASE.endsWith("/") ? `${BASE}${path.replace(/^\//, "")}` : `${BASE}${path}`;
+}
+
 function CheckIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -84,7 +90,10 @@ export default function Pricing() {
                 ))}
               </div>
 
-              <button className={plan.featured ? "btn-plan btn-plan-primary" : "btn-plan btn-plan-ghost"}>
+              <button
+                className={plan.featured ? "btn-plan btn-plan-primary" : "btn-plan btn-plan-ghost"}
+                onClick={() => navigate("/register")}
+              >
                 Começar Agora
               </button>
             </div>
