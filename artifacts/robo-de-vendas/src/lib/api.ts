@@ -52,6 +52,15 @@ export const authApi = {
     api.get<{ hasOpenaiKey: boolean; memberSince: string }>("/auth/settings").then(r => r.data),
 };
 
+export interface AgentExport {
+  version: string;
+  exportedAt: string;
+  name: string;
+  description: string;
+  instructions: string;
+  knowledge: { title: string; content: string }[];
+}
+
 export const agentsApi = {
   list: () => api.get<Agent[]>("/agents").then(r => r.data),
   get: (id: number) => api.get<Agent>(`/agents/${id}`).then(r => r.data),
@@ -60,6 +69,10 @@ export const agentsApi = {
   update: (id: number, data: Partial<{ name: string; description: string; instructions: string }>) =>
     api.put<Agent>(`/agents/${id}`, data).then(r => r.data),
   delete: (id: number) => api.delete(`/agents/${id}`).then(r => r.data),
+  export: (id: number) => api.get<AgentExport>(`/agents/${id}/export`).then(r => r.data),
+  duplicate: (id: number) => api.post<Agent>(`/agents/${id}/duplicate`).then(r => r.data),
+  importAgent: (data: Omit<AgentExport, "version" | "exportedAt">) =>
+    api.post<Agent>("/agents/import", data).then(r => r.data),
   addKnowledge: (id: number, data: { title: string; content: string }) =>
     api.post<Knowledge>(`/agents/${id}/knowledge`, data).then(r => r.data),
   deleteKnowledge: (agentId: number, kid: number) =>

@@ -4,6 +4,14 @@ import { agentsApi, whatsappApi, type Agent } from "../../lib/api";
 
 interface Props { id: string }
 
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AgentDetail({ id }: Props) {
   const agentId = Number(id);
   const [, navigate] = useLocation();
@@ -18,9 +26,19 @@ export default function AgentDetail({ id }: Props) {
   const [newKContent, setNewKContent] = useState("");
   const [addingK, setAddingK] = useState(false);
   const [kError, setKError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [actionMsg, setActionMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const load = () => agentsApi.get(agentId).then(a => setAgent(a)).catch(() => navigate("/app/agents")).finally(() => setLoading(false));
+  const showMsg = (type: "success" | "error", text: string) => {
+    setActionMsg({ type, text });
+    setTimeout(() => setActionMsg(null), 4000);
+  };
+
+  const load = () =>
+    agentsApi.get(agentId).then(a => setAgent(a)).catch(() => navigate("/app/agents")).finally(() => setLoading(false));
+
   useEffect(() => { load(); }, [agentId]);
 
   useEffect(() => {
@@ -34,8 +52,7 @@ export default function AgentDetail({ id }: Props) {
   const handleSave = async () => {
     if (!agent) return;
     if (!agent.name.trim()) { setSaveStatus("error"); return; }
-    setSaving(true);
-    setSaveStatus("idle");
+    setSaving(true); setSaveStatus("idle");
     try {
       await agentsApi.update(agentId, { name: agent.name.trim(), description: agent.description, instructions: agent.instructions });
       setSaveStatus("saved");
@@ -47,11 +64,34 @@ export default function AgentDetail({ id }: Props) {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const data = await agentsApi.export(agentId);
+      const slug = (agent?.name ?? "agente").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+      downloadJson(`${slug}-agente.json`, data);
+      showMsg("success", "Agente exportado com sucesso!");
+    } catch {
+      showMsg("error", "Erro ao exportar agente.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    setDuplicating(true);
+    try {
+      const copy = await agentsApi.duplicate(agentId);
+      navigate(`/app/agents/${copy.id}`);
+    } catch {
+      showMsg("error", "Erro ao duplicar agente. Tente novamente.");
+      setDuplicating(false);
+    }
+  };
+
   const handleConnect = async () => {
     setConnecting(true);
-    try {
-      await whatsappApi.connect(agentId);
-    } catch {}
+    try { await whatsappApi.connect(agentId); } catch {}
     setTimeout(() => setConnecting(false), 1500);
   };
 
@@ -80,23 +120,87 @@ export default function AgentDetail({ id }: Props) {
   };
 
   if (loading) return <div style={{ color: "#9992b8", padding: 40, textAlign: "center" }}>Carregando...</div>;
-  if (!agent) return <div style={{ color: "#f87171", padding: 40 }}>Agente não encontrado</div>;
+  if (!agent)  return <div style={{ color: "#f87171", padding: 40 }}>Agente não encontrado</div>;
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
-        <button onClick={() => navigate("/app/agents")} style={{ background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)", borderRadius: 8, color: "#9992b8", fontSize: 18, cursor: "pointer", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center" }}>←</button>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 4 }}>{agent.name}</h1>
-          <p style={{ color: "#9992b8", fontSize: 14 }}>{agent.description || "Sem descrição"}</p>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 32, flexWrap: "wrap", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <button onClick={() => navigate("/app/agents")} style={{
+            background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)",
+            borderRadius: 8, color: "#9992b8", fontSize: 18, cursor: "pointer",
+            width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0,
+          }}>←</button>
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 4 }}>{agent.name}</h1>
+            <p style={{ color: "#9992b8", fontSize: 14 }}>{agent.description || "Sem descrição"}</p>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            style={{
+              padding: "9px 18px", background: "rgba(139,92,246,0.08)",
+              border: "1px solid rgba(139,92,246,0.22)", borderRadius: 9,
+              color: "#a78bfa", fontSize: 13, fontWeight: 700, cursor: "pointer",
+              opacity: exporting ? 0.7 : 1, transition: "all 0.15s",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+            onMouseEnter={e => { if (!exporting) e.currentTarget.style.background = "rgba(139,92,246,0.14)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(139,92,246,0.08)"; }}
+          >
+            📤 {exporting ? "Exportando..." : "Exportar JSON"}
+          </button>
+          <button
+            onClick={handleDuplicate}
+            disabled={duplicating}
+            style={{
+              padding: "9px 18px", background: "rgba(139,92,246,0.08)",
+              border: "1px solid rgba(139,92,246,0.22)", borderRadius: 9,
+              color: "#a78bfa", fontSize: 13, fontWeight: 700, cursor: "pointer",
+              opacity: duplicating ? 0.7 : 1, transition: "all 0.15s",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+            onMouseEnter={e => { if (!duplicating) e.currentTarget.style.background = "rgba(139,92,246,0.14)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(139,92,246,0.08)"; }}
+          >
+            📋 {duplicating ? "Duplicando..." : "Duplicar"}
+          </button>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 4, marginBottom: 28, background: "#080810", padding: 6, borderRadius: 12, width: "fit-content", border: "1px solid rgba(139,92,246,0.10)" }}>
-        {([["info","📝 Informações"], ["knowledge","📚 Base de Conhecimento"], ["whatsapp","📱 WhatsApp"]] as const).map(([t, l]) => (
+      {/* Feedback banner */}
+      {actionMsg && (
+        <div style={{
+          padding: "10px 16px", borderRadius: 10, fontSize: 13, marginBottom: 20,
+          background: actionMsg.type === "success" ? "rgba(139,92,246,0.08)" : "rgba(239,68,68,0.08)",
+          border: `1px solid ${actionMsg.type === "success" ? "rgba(139,92,246,0.3)" : "rgba(239,68,68,0.3)"}`,
+          color: actionMsg.type === "success" ? "#a78bfa" : "#fca5a5",
+        }}>
+          {actionMsg.type === "success" ? "✓ " : "⚠️ "}{actionMsg.text}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{
+        display: "flex", gap: 4, marginBottom: 28, background: "#080810",
+        padding: 6, borderRadius: 12, width: "fit-content",
+        border: "1px solid rgba(139,92,246,0.10)",
+      }}>
+        {([
+          ["info", "📝 Informações"],
+          ["knowledge", "📚 Conhecimento"],
+          ["whatsapp", "📱 WhatsApp"],
+        ] as const).map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)} style={{
-            padding: "8px 20px", borderRadius: 8, border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            background: tab === t ? "linear-gradient(135deg, #8b5cf6, #7c3aed)" : "transparent",
+            padding: "8px 20px", borderRadius: 8, border: "none", fontSize: 13,
+            fontWeight: 700, cursor: "pointer",
+            background: tab === t ? "linear-gradient(135deg,#8b5cf6,#7c3aed)" : "transparent",
             color: tab === t ? "#ffffff" : "#9992b8",
             boxShadow: tab === t ? "0 2px 8px rgba(139,92,246,0.3)" : "none",
             transition: "all 0.15s",
@@ -104,24 +208,30 @@ export default function AgentDetail({ id }: Props) {
         ))}
       </div>
 
+      {/* ── Info tab ── */}
       {tab === "info" && (
         <div style={{ maxWidth: 600 }}>
           <Card>
             <div style={{ marginBottom: 16 }}>
               <label style={labelStyle}>Nome do Agente *</label>
-              <input value={agent.name} onChange={e => setAgent({ ...agent, name: e.target.value })} style={inputStyle} placeholder="Nome do agente" />
+              <input value={agent.name} onChange={e => setAgent({ ...agent, name: e.target.value })}
+                style={inputStyle} placeholder="Nome do agente" />
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={labelStyle}>Descrição</label>
-              <input value={agent.description} onChange={e => setAgent({ ...agent, description: e.target.value })} placeholder="Para que serve este agente?" style={inputStyle} />
+              <input value={agent.description}
+                onChange={e => setAgent({ ...agent, description: e.target.value })}
+                placeholder="Para que serve este agente?" style={inputStyle} />
             </div>
             <div style={{ marginBottom: 24 }}>
               <label style={labelStyle}>Instruções do Agente</label>
-              <p style={{ fontSize: 12, color: "#9992b8", marginBottom: 8 }}>Defina como o agente deve se comportar, tom de voz, limitações, etc.</p>
+              <p style={{ fontSize: 12, color: "#9992b8", marginBottom: 8 }}>
+                Defina como o agente deve se comportar, tom de voz, limitações, etc.
+              </p>
               <textarea
                 value={agent.instructions}
                 onChange={e => setAgent({ ...agent, instructions: e.target.value })}
-                placeholder="Ex: Você é um assistente de vendas da loja X. Atenda os clientes com simpatia, fale sempre em português, e quando não souber a resposta, peça para o cliente aguardar."
+                placeholder="Ex: Você é um assistente de vendas da loja X. Atenda os clientes com simpatia, fale sempre em português..."
                 rows={8}
                 style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
               />
@@ -138,18 +248,24 @@ export default function AgentDetail({ id }: Props) {
               </div>
             )}
 
-            <button onClick={handleSave} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}>
+            <button onClick={handleSave} disabled={saving}
+              style={{ ...btnPrimary, opacity: saving ? 0.7 : 1 }}>
               {saving ? "Salvando..." : "💾 Salvar alterações"}
             </button>
           </Card>
         </div>
       )}
 
+      {/* ── Knowledge tab ── */}
       {tab === "knowledge" && (
         <div style={{ maxWidth: 700 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <p style={{ color: "#9992b8", fontSize: 14 }}>Adicione documentos, FAQs e textos para treinar seu agente.</p>
-            <button onClick={() => { setAddingK(true); setKError(""); }} style={btnPrimary}>+ Adicionar</button>
+            <p style={{ color: "#9992b8", fontSize: 14 }}>
+              Adicione documentos, FAQs e textos para treinar seu agente.
+            </p>
+            <button onClick={() => { setAddingK(true); setKError(""); }} style={btnPrimary}>
+              + Adicionar
+            </button>
           </div>
 
           {addingK && (
@@ -157,15 +273,20 @@ export default function AgentDetail({ id }: Props) {
               <form onSubmit={handleAddKnowledge}>
                 <div style={{ marginBottom: 14 }}>
                   <label style={labelStyle}>Título *</label>
-                  <input value={newKTitle} onChange={e => setNewKTitle(e.target.value)} placeholder="Ex: Política de Devolução" style={inputStyle} />
+                  <input autoFocus value={newKTitle} onChange={e => setNewKTitle(e.target.value)}
+                    placeholder="Ex: Política de Devolução" style={inputStyle} />
                 </div>
                 <div style={{ marginBottom: 16 }}>
                   <label style={labelStyle}>Conteúdo *</label>
-                  <textarea value={newKContent} onChange={e => setNewKContent(e.target.value)} placeholder="Cole o texto, FAQ, ou informações que o agente deve conhecer..." rows={6} style={{ ...inputStyle, resize: "vertical" }} />
+                  <textarea value={newKContent} onChange={e => setNewKContent(e.target.value)}
+                    placeholder="Cole o texto, FAQ, ou informações que o agente deve conhecer..."
+                    rows={6} style={{ ...inputStyle, resize: "vertical" }} />
                 </div>
                 {kError && <p style={{ color: "#fca5a5", fontSize: 13, marginBottom: 12 }}>⚠️ {kError}</p>}
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button type="button" onClick={() => { setAddingK(false); setKError(""); }} style={btnGhost}>Cancelar</button>
+                  <button type="button" onClick={() => { setAddingK(false); setKError(""); }} style={btnGhost}>
+                    Cancelar
+                  </button>
                   <button type="submit" style={btnPrimary}>Salvar documento</button>
                 </div>
               </form>
@@ -176,7 +297,9 @@ export default function AgentDetail({ id }: Props) {
             <div style={{ textAlign: "center", padding: "60px 0" }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
               <p style={{ color: "#9992b8", marginBottom: 20 }}>Nenhum documento adicionado ainda</p>
-              <button onClick={() => setAddingK(true)} style={btnPrimary}>+ Adicionar primeiro documento</button>
+              <button onClick={() => setAddingK(true)} style={btnPrimary}>
+                + Adicionar primeiro documento
+              </button>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -185,9 +308,15 @@ export default function AgentDetail({ id }: Props) {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{k.title}</h3>
-                      <p style={{ fontSize: 13, color: "#9992b8", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{k.content.slice(0, 200)}{k.content.length > 200 ? "..." : ""}</p>
+                      <p style={{ fontSize: 13, color: "#9992b8", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                        {k.content.slice(0, 300)}{k.content.length > 300 ? "..." : ""}
+                      </p>
                     </div>
-                    <button onClick={() => handleDeleteKnowledge(k.id)} style={{ marginLeft: 16, padding: "5px 12px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, color: "#f87171", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>Excluir</button>
+                    <button onClick={() => handleDeleteKnowledge(k.id)} style={{
+                      marginLeft: 16, padding: "5px 12px",
+                      background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+                      borderRadius: 6, color: "#f87171", fontSize: 12, cursor: "pointer", flexShrink: 0,
+                    }}>Excluir</button>
                   </div>
                 </Card>
               ))}
@@ -196,6 +325,7 @@ export default function AgentDetail({ id }: Props) {
         </div>
       )}
 
+      {/* ── WhatsApp tab ── */}
       {tab === "whatsapp" && (
         <div style={{ maxWidth: 500 }}>
           <Card>
@@ -211,7 +341,6 @@ export default function AgentDetail({ id }: Props) {
                   background: whatsappStatus.status === "connected" ? "#8b5cf6" :
                     whatsappStatus.status === "qr" || whatsappStatus.status === "connecting" ? "#fbbf24" : "#4b5563",
                   boxShadow: whatsappStatus.status === "connected" ? "0 0 8px rgba(139,92,246,0.6)" : "none",
-                  animation: whatsappStatus.status === "connecting" ? "pulse-dot 1s infinite" : "none",
                 }} />
                 <span style={{ fontSize: 14, fontWeight: 600 }}>
                   {whatsappStatus.status === "connected" ? `Conectado: +${whatsappStatus.phoneNumber}` :
@@ -234,9 +363,13 @@ export default function AgentDetail({ id }: Props) {
             )}
 
             {whatsappStatus.status === "connected" ? (
-              <button onClick={handleDisconnect} style={{ ...btnGhost, width: "100%" }}>Desconectar WhatsApp</button>
+              <button onClick={handleDisconnect} style={{ ...btnGhost, width: "100%" }}>
+                Desconectar WhatsApp
+              </button>
             ) : (
-              <button onClick={handleConnect} disabled={connecting || whatsappStatus.status === "connecting"} style={{ ...btnPrimary, width: "100%", opacity: (connecting || whatsappStatus.status === "connecting") ? 0.7 : 1 }}>
+              <button onClick={handleConnect}
+                disabled={connecting || whatsappStatus.status === "connecting"}
+                style={{ ...btnPrimary, width: "100%", opacity: (connecting || whatsappStatus.status === "connecting") ? 0.7 : 1 }}>
                 {connecting || whatsappStatus.status === "connecting" ? "⟳ Conectando..." :
                   whatsappStatus.status === "qr" ? "⟳ Aguardando escanear..." : "📱 Conectar WhatsApp"}
               </button>
@@ -244,7 +377,8 @@ export default function AgentDetail({ id }: Props) {
 
             <div style={{ marginTop: 20, padding: 14, borderRadius: 10, background: "rgba(139,92,246,0.05)", border: "1px solid rgba(139,92,246,0.1)" }}>
               <p style={{ fontSize: 13, color: "#9992b8", lineHeight: 1.7, margin: 0 }}>
-                💡 Para respostas automáticas com I.A, configure sua chave OpenAI em <strong style={{ color: "#8b5cf6" }}>Configurações</strong>.
+                💡 Para respostas automáticas com I.A, configure sua chave OpenAI em{" "}
+                <strong style={{ color: "#8b5cf6" }}>Configurações</strong>.
               </p>
             </div>
           </Card>
@@ -262,16 +396,21 @@ function Card({ children, style = {} }: { children: React.ReactNode; style?: Rea
   );
 }
 
-const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 600, color: "#9992b8", marginBottom: 6 };
+const labelStyle: React.CSSProperties = {
+  display: "block", fontSize: 13, fontWeight: 600, color: "#9992b8", marginBottom: 6,
+};
 const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "11px 14px", background: "#0e0e1a", border: "1px solid rgba(139,92,246,0.12)",
-  borderRadius: 8, color: "#ffffff", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "'Manrope', sans-serif"
+  width: "100%", padding: "11px 14px", background: "#0e0e1a",
+  border: "1px solid rgba(139,92,246,0.12)", borderRadius: 8,
+  color: "#ffffff", fontSize: 14, outline: "none", boxSizing: "border-box",
+  fontFamily: "'Manrope', sans-serif",
 };
 const btnPrimary: React.CSSProperties = {
-  padding: "11px 24px", background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
-  border: "none", borderRadius: 8, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer"
+  padding: "11px 24px", background: "linear-gradient(135deg,#8b5cf6,#7c3aed)",
+  border: "none", borderRadius: 8, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
 };
 const btnGhost: React.CSSProperties = {
-  padding: "11px 24px", background: "transparent", border: "1px solid rgba(139,92,246,0.2)",
-  borderRadius: 8, color: "#9992b8", fontSize: 14, fontWeight: 600, cursor: "pointer"
+  padding: "11px 24px", background: "transparent",
+  border: "1px solid rgba(139,92,246,0.2)", borderRadius: 8,
+  color: "#9992b8", fontSize: 14, fontWeight: 600, cursor: "pointer",
 };
