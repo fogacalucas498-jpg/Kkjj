@@ -27,7 +27,7 @@ api.interceptors.response.use(
 export interface User { id: number; name: string; email: string; }
 export interface Agent {
   id: number; userId: number; name: string; description: string;
-  instructions: string; createdAt: string; updatedAt: string;
+  instructions: string; responseDelaySecs: number; createdAt: string; updatedAt: string;
   whatsapp?: { status: string; phoneNumber?: string; qrCode?: string } | null;
   knowledge?: Knowledge[];
 }
@@ -66,7 +66,7 @@ export const agentsApi = {
   get: (id: number) => api.get<Agent>(`/agents/${id}`).then(r => r.data),
   create: (data: { name: string; description?: string; instructions?: string }) =>
     api.post<Agent>("/agents", data).then(r => r.data),
-  update: (id: number, data: Partial<{ name: string; description: string; instructions: string }>) =>
+  update: (id: number, data: Partial<{ name: string; description: string; instructions: string; responseDelaySecs: number }>) =>
     api.put<Agent>(`/agents/${id}`, data).then(r => r.data),
   delete: (id: number) => api.delete(`/agents/${id}`).then(r => r.data),
   export: (id: number) => api.get<AgentExport>(`/agents/${id}/export`).then(r => r.data),

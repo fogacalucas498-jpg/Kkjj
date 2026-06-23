@@ -7,34 +7,46 @@ const router = Router();
 router.use(requireAuth);
 
 /* ── helpers ── */
-async function withStatus(agentId: number) {
-  const [session] = await db.select({ status: whatsappSessionsTable.status, phoneNumber: whatsappSessionsTable.phoneNumber })
-    .from(whatsappSessionsTable).where(eq(whatsappSessionsTable.agentId, agentId)).limit(1);
+async function getSessionStatus(agentId: number) {
+  const [session] = await db
+    .select({ status: whatsappSessionsTable.status, phoneNumber: whatsappSessionsTable.phoneNumber })
+    .from(whatsappSessionsTable)
+    .where(eq(whatsappSessionsTable.agentId, agentId))
+    .limit(1);
   return session ?? null;
 }
 
 async function verifyOwner(agentId: number, userId: number) {
-  const [a] = await db.select({ id: agentsTable.id }).from(agentsTable)
-    .where(and(eq(agentsTable.id, agentId), eq(agentsTable.userId, userId))).limit(1);
+  const [a] = await db
+    .select({ id: agentsTable.id })
+    .from(agentsTable)
+    .where(and(eq(agentsTable.id, agentId), eq(agentsTable.userId, userId)))
+    .limit(1);
   return a ?? null;
 }
 
 /* ── List ── */
 router.get("/agents", async (req: AuthRequest, res) => {
   const agents = await db.select().from(agentsTable).where(eq(agentsTable.userId, req.userId!));
-  const withStatus = await Promise.all(agents.map(async (a) => ({
-    ...a, whatsapp: await withStatus(a.id)
-  })));
-  res.json(withStatus);
+  const result = await Promise.all(
+    agents.map(async (a) => ({ ...a, whatsapp: await getSessionStatus(a.id) }))
+  );
+  res.json(result);
 });
 
 /* ── Create ── */
 router.post("/agents", async (req: AuthRequest, res) => {
   const { name, description, instructions } = req.body;
   if (!name?.trim()) { res.status(400).json({ error: "Nome é obrigatório" }); return; }
-  const [agent] = await db.insert(agentsTable).values({
-    userId: req.userId!, name: name.trim(), description: description ?? "", instructions: instructions ?? ""
-  }).returning();
+  const [agent] = await db
+    .insert(agentsTable)
+    .values({
+      userId: req.userId!,
+      name: name.trim(),
+      description: description ?? "",
+      instructions: instructions ?? "",
+    })
+    .returning();
   res.status(201).json(agent);
 });
 
@@ -64,12 +76,15 @@ router.post("/agents/import", async (req: AuthRequest, res) => {
     }
   }
 
-  const [agent] = await db.insert(agentsTable).values({
-    userId: req.userId!,
-    name: name.trim(),
-    description: description?.trim() ?? "",
-    instructions: instructions?.trim() ?? "",
-  }).returning();
+  const [agent] = await db
+    .insert(agentsTable)
+    .values({
+      userId: req.userId!,
+      name: name.trim(),
+      description: description?.trim() ?? "",
+      instructions: instructions?.trim() ?? "",
+    })
+    .returning();
 
   if (knowledgeItems.length > 0) {
     await db.insert(knowledgeTable).values(
@@ -77,17 +92,20 @@ router.post("/agents/import", async (req: AuthRequest, res) => {
     );
   }
 
-  const fullAgent = await db.select().from(agentsTable).where(eq(agentsTable.id, agent!.id)).limit(1);
-  const knowledge2 = await db.select().from(knowledgeTable).where(eq(knowledgeTable.agentId, agent!.id));
-  res.status(201).json({ ...fullAgent[0], knowledge: knowledge2, whatsapp: null });
+  const [full] = await db.select().from(agentsTable).where(eq(agentsTable.id, agent!.id)).limit(1);
+  const kRows = await db.select().from(knowledgeTable).where(eq(knowledgeTable.agentId, agent!.id));
+  res.status(201).json({ ...full, knowledge: kRows, whatsapp: null });
 });
 
 /* ── Get one ── */
 router.get("/agents/:id", async (req: AuthRequest, res) => {
   const id = Number(req.params["id"]);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
-  const [agent] = await db.select().from(agentsTable)
-    .where(and(eq(agentsTable.id, id), eq(agentsTable.userId, req.userId!))).limit(1);
+  const [agent] = await db
+    .select()
+    .from(agentsTable)
+    .where(and(eq(agentsTable.id, id), eq(agentsTable.userId, req.userId!)))
+    .limit(1);
   if (!agent) { res.status(404).json({ error: "Agente não encontrado" }); return; }
   const knowledge = await db.select().from(knowledgeTable).where(eq(knowledgeTable.agentId, id));
   const [session] = await db.select().from(whatsappSessionsTable).where(eq(whatsappSessionsTable.agentId, id)).limit(1);
@@ -98,9 +116,23 @@ router.get("/agents/:id", async (req: AuthRequest, res) => {
 router.put("/agents/:id", async (req: AuthRequest, res) => {
   const id = Number(req.params["id"]);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
-  const { name, description, instructions } = req.body;
-  const [agent] = await db.update(agentsTable)
-    .set({ name, description, instructions, updatedAt: new Date() })
+  const { name, description, instructions, responseDelaySecs } = req.body;
+  if (name !== undefined && !name?.trim()) {
+    res.status(400).json({ error: "Nome não pode ficar vazio." }); return;
+  }
+  const delaySecs = typeof responseDelaySecs === "number"
+    ? Math.max(1, Math.min(Math.round(responseDelaySecs), 60))
+    : undefined;
+
+  const [agent] = await db
+    .update(agentsTable)
+    .set({
+      ...(name !== undefined && { name: name.trim() }),
+      ...(description !== undefined && { description }),
+      ...(instructions !== undefined && { instructions }),
+      ...(delaySecs !== undefined && { responseDelaySecs: delaySecs }),
+      updatedAt: new Date(),
+    })
     .where(and(eq(agentsTable.id, id), eq(agentsTable.userId, req.userId!)))
     .returning();
   if (!agent) { res.status(404).json({ error: "Agente não encontrado" }); return; }
@@ -119,39 +151,53 @@ router.delete("/agents/:id", async (req: AuthRequest, res) => {
 router.get("/agents/:id/export", async (req: AuthRequest, res) => {
   const id = Number(req.params["id"]);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
-  const [agent] = await db.select().from(agentsTable)
-    .where(and(eq(agentsTable.id, id), eq(agentsTable.userId, req.userId!))).limit(1);
+  const [agent] = await db
+    .select()
+    .from(agentsTable)
+    .where(and(eq(agentsTable.id, id), eq(agentsTable.userId, req.userId!)))
+    .limit(1);
   if (!agent) { res.status(404).json({ error: "Agente não encontrado" }); return; }
-  const knowledge = await db.select({ title: knowledgeTable.title, content: knowledgeTable.content })
-    .from(knowledgeTable).where(eq(knowledgeTable.agentId, id));
-  const exported = {
+  const knowledge = await db
+    .select({ title: knowledgeTable.title, content: knowledgeTable.content })
+    .from(knowledgeTable)
+    .where(eq(knowledgeTable.agentId, id));
+  res.json({
     version: "1",
     exportedAt: new Date().toISOString(),
     name: agent.name,
     description: agent.description,
     instructions: agent.instructions,
+    responseDelaySecs: agent.responseDelaySecs,
     knowledge,
-  };
-  res.json(exported);
+  });
 });
 
 /* ── Duplicate ── */
 router.post("/agents/:id/duplicate", async (req: AuthRequest, res) => {
   const id = Number(req.params["id"]);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
-  const [agent] = await db.select().from(agentsTable)
-    .where(and(eq(agentsTable.id, id), eq(agentsTable.userId, req.userId!))).limit(1);
+  const [agent] = await db
+    .select()
+    .from(agentsTable)
+    .where(and(eq(agentsTable.id, id), eq(agentsTable.userId, req.userId!)))
+    .limit(1);
   if (!agent) { res.status(404).json({ error: "Agente não encontrado" }); return; }
 
-  const knowledge = await db.select({ title: knowledgeTable.title, content: knowledgeTable.content })
-    .from(knowledgeTable).where(eq(knowledgeTable.agentId, id));
+  const knowledge = await db
+    .select({ title: knowledgeTable.title, content: knowledgeTable.content })
+    .from(knowledgeTable)
+    .where(eq(knowledgeTable.agentId, id));
 
-  const [newAgent] = await db.insert(agentsTable).values({
-    userId: req.userId!,
-    name: `${agent.name} (Cópia)`,
-    description: agent.description,
-    instructions: agent.instructions,
-  }).returning();
+  const [newAgent] = await db
+    .insert(agentsTable)
+    .values({
+      userId: req.userId!,
+      name: `${agent.name} (Cópia)`,
+      description: agent.description,
+      instructions: agent.instructions,
+      responseDelaySecs: agent.responseDelaySecs,
+    })
+    .returning();
 
   if (knowledge.length > 0) {
     await db.insert(knowledgeTable).values(
@@ -175,9 +221,14 @@ router.post("/agents/:id/knowledge", async (req: AuthRequest, res) => {
   const id = Number(req.params["id"]);
   if (isNaN(id)) { res.status(400).json({ error: "ID inválido" }); return; }
   const { title, content } = req.body;
-  if (!title?.trim() || !content?.trim()) { res.status(400).json({ error: "Título e conteúdo são obrigatórios" }); return; }
+  if (!title?.trim() || !content?.trim()) {
+    res.status(400).json({ error: "Título e conteúdo são obrigatórios" }); return;
+  }
   if (!await verifyOwner(id, req.userId!)) { res.status(404).json({ error: "Agente não encontrado" }); return; }
-  const [item] = await db.insert(knowledgeTable).values({ agentId: id, title: title.trim(), content: content.trim() }).returning();
+  const [item] = await db
+    .insert(knowledgeTable)
+    .values({ agentId: id, title: title.trim(), content: content.trim() })
+    .returning();
   res.status(201).json(item);
 });
 
