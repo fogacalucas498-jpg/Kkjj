@@ -1,19 +1,24 @@
+import { Icon } from "./Icon";
+
 const steps = [
   {
     num: "01",
-    emoji: "🤖",
+    iconName: "robot" as const,
+    iconColor: "#8b5cf6",
     title: "Treine Agentes",
     desc: "Administre o conteúdo ensinado ao seu agente de forma fácil e ampla com o nosso editor de agentes poderoso e extremamente simples de usar.",
   },
   {
     num: "02",
-    emoji: "📱",
+    iconName: "mobile-screen" as const,
+    iconColor: "#a78bfa",
     title: "Conecte os Números",
     desc: "Seja com documentações, PDFs, Instruções ou Bases de Conhecimento, existem diversas formas de alimentar o conhecimento sobre sua empresa para seu agente.",
   },
   {
     num: "03",
-    emoji: "📈",
+    iconName: "chart-bar" as const,
+    iconColor: "#7c3aed",
     title: "Veja os Resultados",
     desc: "Mantenha o controle absoluto do fluxo de conversa. Agentes humanos podem intervir a qualquer momento ao enviar uma mensagem!",
   },
@@ -39,7 +44,9 @@ export default function HowItWorks() {
           {steps.map((s) => (
             <div key={s.title} className="how-step">
               <div className="how-step-num">{s.num}</div>
-              <div className="how-step-icon">{s.emoji}</div>
+              <div className="how-step-icon" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon name={s.iconName} size={32} color={s.iconColor} />
+              </div>
               <h3>{s.title}</h3>
               <p>{s.desc}</p>
             </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Icon } from "./Icon";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -35,8 +36,22 @@ export default function Navbar() {
           </nav>
 
           <div className="navbar-actions">
-            <button className="btn-ghost" onClick={() => navigate("/login")}>Acessar</button>
-            <button className="btn-primary" onClick={() => navigate("/register")}>TESTE GRÁTIS</button>
+            <button
+              className="btn-ghost"
+              onClick={() => navigate("/login")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            >
+              <Icon name="right-from-bracket" size={13} color="currentColor" />
+              Acessar
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => navigate("/register")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            >
+              <Icon name="bolt" size={13} color="#fff" />
+              TESTE GRÁTIS
+            </button>
           </div>
         </div>
       </div>

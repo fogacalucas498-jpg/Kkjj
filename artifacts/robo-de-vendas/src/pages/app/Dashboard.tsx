@@ -197,6 +197,11 @@ export default function Dashboard() {
           </h1>
           <span style={{ fontSize: 24 }}>👋</span>
         </div>
+        {user?.dashboardName && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 12px", background: "rgba(139,92,246,0.10)", border: "1px solid rgba(139,92,246,0.22)", borderRadius: 100, marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#a78bfa" }}>{user.dashboardName}</span>
+          </div>
+        )}
         <p style={{ color: "#9992b8", fontSize: 14 }}>
           Painel de controle · {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
         </p>

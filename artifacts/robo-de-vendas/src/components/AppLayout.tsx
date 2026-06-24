@@ -126,17 +126,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             onMouseLeave={e => e.currentTarget.style.background = location === "/app/profile" ? "rgba(139,92,246,0.08)" : "transparent"}
           >
             <div style={{
-              width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+              width: 34, height: 34, borderRadius: "50%", flexShrink: 0, overflow: "hidden",
               background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 13, fontWeight: 900, color: "#fff",
               boxShadow: "0 2px 10px rgba(139,92,246,0.35)",
             }}>
-              {getInitials(user?.name ?? "U")}
+              {user?.avatar
+                ? <img src={user.avatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                : getInitials(user?.name ?? "U")}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.name}</div>
-              <div style={{ fontSize: 11, color: "#9992b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</div>
+              <div style={{ fontSize: 11, color: user?.dashboardName ? "#a78bfa" : "#9992b8", fontWeight: user?.dashboardName ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {user?.dashboardName ?? user?.email}
+              </div>
             </div>
             <Icon name="chevron-right" size={11} color="#9992b8" style={{ flexShrink: 0 }} />
           </div>
@@ -171,12 +175,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <Link href="/app/profile">
             <div style={{
-              width: 32, height: 32, borderRadius: "50%",
+              width: 32, height: 32, borderRadius: "50%", overflow: "hidden",
               background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 12, fontWeight: 900, color: "#fff", cursor: "pointer",
             }}>
-              {getInitials(user?.name ?? "U")}
+              {user?.avatar
+                ? <img src={user.avatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                : getInitials(user?.name ?? "U")}
             </div>
           </Link>
         </div>

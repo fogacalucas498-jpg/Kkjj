@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../contexts/auth";
 import { authApi } from "../../lib/api";
 import { Icon } from "../../components/Icon";
@@ -9,16 +9,55 @@ function getInitials(name: string) {
   return name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase();
 }
 
+async function resizeImage(file: File, maxSize = 256): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (file.size > 8 * 1024 * 1024) {
+      reject(new Error("Arquivo muito grande. Máximo 8 MB.")); return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const size = Math.min(img.width, img.height, maxSize);
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas não disponível")); return; }
+        const sx = (img.width - size) / 2;
+        const sy = (img.height - size) / 2;
+        ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => reject(new Error("Imagem inválida"));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Profile() {
   const { user, updateUser } = useAuth();
   const [section, setSection] = useState<Section>("info");
 
+  /* ── Info form ── */
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
+  const [dashboardName, setDashboardName] = useState(user?.dashboardName ?? "");
   const [infoPassword, setInfoPassword] = useState("");
   const [infoStatus, setInfoStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [infoError, setInfoError] = useState("");
 
+  /* ── Avatar ── */
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar ?? null);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarStatus, setAvatarStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [avatarError, setAvatarError] = useState("");
+  const [avatarDirty, setAvatarDirty] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  /* ── Password form ── */
   const [currentPwd, setCurrentPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -26,6 +65,7 @@ export default function Profile() {
   const [pwdError, setPwdError] = useState("");
   const [showPwds, setShowPwds] = useState(false);
 
+  /* ── AI key ── */
   const [apiKey, setApiKey] = useState("");
   const [hasKey, setHasKey] = useState(false);
   const [memberSince, setMemberSince] = useState<string | null>(null);
@@ -42,8 +82,53 @@ export default function Profile() {
   useEffect(() => {
     setName(user?.name ?? "");
     setEmail(user?.email ?? "");
+    setDashboardName(user?.dashboardName ?? "");
+    setAvatarPreview(user?.avatar ?? null);
   }, [user]);
 
+  /* ── Avatar file pick ── */
+  const handleAvatarFile = async (file: File) => {
+    setAvatarError("");
+    try {
+      const dataUrl = await resizeImage(file);
+      setAvatarPreview(dataUrl);
+      setAvatarDirty(true);
+      setAvatarStatus("idle");
+    } catch (err: any) {
+      setAvatarError(err?.message ?? "Erro ao processar imagem.");
+    }
+  };
+
+  const handleAvatarDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file?.type.startsWith("image/")) handleAvatarFile(file);
+  };
+
+  const handleAvatarSave = async () => {
+    setAvatarSaving(true);
+    setAvatarError("");
+    try {
+      const updated = await authApi.updateProfile({ avatar: avatarPreview });
+      updateUser({ avatar: updated.avatar });
+      setAvatarDirty(false);
+      setAvatarStatus("saved");
+      setTimeout(() => setAvatarStatus("idle"), 3000);
+    } catch (err: any) {
+      setAvatarError(err?.response?.data?.error ?? "Erro ao salvar foto.");
+      setAvatarStatus("error");
+    } finally {
+      setAvatarSaving(false);
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    setAvatarPreview(null);
+    setAvatarDirty(true);
+    setAvatarStatus("idle");
+  };
+
+  /* ── Info save ── */
   const handleInfoSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setInfoError(""); setInfoStatus("saving");
@@ -55,9 +140,11 @@ export default function Profile() {
       const payload: Parameters<typeof authApi.updateProfile>[0] = {};
       if (name.trim() !== user?.name) payload.name = name.trim();
       if (emailChanged) { payload.email = email.trim(); payload.currentPassword = infoPassword; }
-      if (!payload.name && !payload.email) { setInfoStatus("idle"); return; }
+      const dnTrimmed = dashboardName.trim() || null;
+      if (dnTrimmed !== (user?.dashboardName ?? null)) payload.dashboardName = dnTrimmed;
+      if (Object.keys(payload).length === 0) { setInfoStatus("idle"); return; }
       const updated = await authApi.updateProfile(payload);
-      updateUser({ name: updated.name, email: updated.email });
+      updateUser({ name: updated.name, email: updated.email, dashboardName: updated.dashboardName });
       setInfoPassword("");
       setInfoStatus("saved");
       setTimeout(() => setInfoStatus("idle"), 3000);
@@ -67,6 +154,7 @@ export default function Profile() {
     }
   };
 
+  /* ── Password save ── */
   const handlePwdSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwdError(""); setPwdStatus("saving");
@@ -83,6 +171,7 @@ export default function Profile() {
     }
   };
 
+  /* ── AI key save ── */
   const handleKeySave = async (e: React.FormEvent) => {
     e.preventDefault();
     setKeyStatus("saving");
@@ -120,32 +209,99 @@ export default function Profile() {
         <p style={{ color: "#9992b8", fontSize: 14 }}>Gerencie seus dados pessoais e configurações da conta</p>
       </div>
 
-      {/* Avatar card */}
-      <div style={{ background: "#080810", border: "1px solid rgba(139,92,246,0.12)", borderRadius: 20, padding: 28, marginBottom: 24, display: "flex", alignItems: "center", gap: 24 }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: "50%",
-          background: "linear-gradient(135deg, #8b5cf6, #7c3aed)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 26, fontWeight: 900, color: "#fff", flexShrink: 0,
-          boxShadow: "0 0 24px rgba(139,92,246,0.35)",
-        }}>
-          {getInitials(user?.name ?? "U")}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{user?.name}</div>
-          <div style={{ fontSize: 14, color: "#9992b8", marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email}</div>
-          {memberSince && (
-            <div style={{ fontSize: 12, color: "#9992b8" }}>
-              Membro desde {new Date(memberSince).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+      {/* ── Avatar card ── */}
+      <div style={{ background: "#080810", border: "1px solid rgba(139,92,246,0.12)", borderRadius: 20, padding: 28, marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+          {/* Avatar circle — click to upload */}
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <div
+              onClick={() => fileRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={handleAvatarDrop}
+              style={{
+                width: 80, height: 80, borderRadius: "50%", cursor: "pointer",
+                overflow: "hidden", position: "relative",
+                boxShadow: "0 0 24px rgba(139,92,246,0.35)",
+                border: "2px solid rgba(139,92,246,0.4)",
+              }}
+            >
+              {avatarPreview
+                ? <img src={avatarPreview} alt="Foto" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                : (
+                  <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #8b5cf6, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 900, color: "#fff" }}>
+                    {getInitials(user?.name ?? "U")}
+                  </div>
+                )}
+              {/* Hover overlay */}
+              <div style={{
+                position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                opacity: 0, transition: "opacity 0.2s",
+              }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                onMouseLeave={e => (e.currentTarget.style.opacity = "0")}
+              >
+                <Icon name="pen" size={18} color="#fff" />
+              </div>
             </div>
-          )}
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ""; }} />
+          </div>
+
+          {/* Info + avatar actions */}
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 2 }}>{user?.name}</div>
+            <div style={{ fontSize: 14, color: "#9992b8", marginBottom: user?.dashboardName ? 4 : 0 }}>{user?.email}</div>
+            {user?.dashboardName && (
+              <div style={{ fontSize: 13, color: "#8b5cf6", fontWeight: 600 }}>{user.dashboardName}</div>
+            )}
+            {memberSince && (
+              <div style={{ fontSize: 12, color: "#9992b8", marginTop: 4 }}>
+                Membro desde {new Date(memberSince).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+              </div>
+            )}
+          </div>
+
+          {/* Avatar controls */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+            <div style={{ padding: "5px 14px", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 100, fontSize: 12, fontWeight: 700, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 5 }}>
+              <Icon name="star" size={11} color="#8b5cf6" /> Plano Grátis
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => fileRef.current?.click()} style={{ padding: "6px 14px", background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 7, color: "#a78bfa", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <Icon name="pen" size={11} /> Alterar foto
+              </button>
+              {avatarPreview && (
+                <button onClick={handleAvatarRemove} style={{ padding: "6px 12px", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.18)", borderRadius: 7, color: "#f87171", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  Remover
+                </button>
+              )}
+            </div>
+            {avatarDirty && (
+              <button onClick={handleAvatarSave} disabled={avatarSaving} style={{ padding: "7px 16px", background: "linear-gradient(135deg, #8b5cf6, #7c3aed)", border: "none", borderRadius: 7, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, opacity: avatarSaving ? 0.7 : 1 }}>
+                {avatarSaving ? <><Icon name="spinner" size={11} spin /> Salvando...</> : <><Icon name="floppy-disk" size={11} /> Salvar foto</>}
+              </button>
+            )}
+          </div>
         </div>
-        <div style={{ padding: "6px 16px", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 100, fontSize: 12, fontWeight: 700, color: "#8b5cf6", flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
-          <Icon name="star" size={11} color="#8b5cf6" /> Plano Grátis
-        </div>
+
+        {/* Avatar feedback */}
+        {avatarError && (
+          <div style={{ marginTop: 14, padding: "8px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, color: "#fca5a5", fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}>
+            <Icon name="triangle-exclamation" size={12} color="#fca5a5" /> {avatarError}
+          </div>
+        )}
+        {avatarStatus === "saved" && (
+          <div style={{ marginTop: 14, padding: "8px 14px", background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.25)", borderRadius: 8, color: "#a78bfa", fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}>
+            <Icon name="circle-check" size={12} color="#a78bfa" /> Foto atualizada com sucesso!
+          </div>
+        )}
+        <p style={{ marginTop: 12, fontSize: 12, color: "#9992b8" }}>
+          Clique ou arraste uma imagem (JPG, PNG, WebP). Será recortada em círculo 256×256 px.
+        </p>
       </div>
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <div style={{ display: "flex", gap: 4, marginBottom: 24, background: "#080810", padding: 6, borderRadius: 14, width: "fit-content", border: "1px solid rgba(139,92,246,0.10)" }}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setSection(t.id)} style={{
@@ -162,6 +318,7 @@ export default function Profile() {
       </div>
 
       <div style={{ maxWidth: 560 }}>
+
         {/* ── Dados Pessoais ── */}
         {section === "info" && (
           <Card>
@@ -178,6 +335,18 @@ export default function Profile() {
                   <input type="password" value={infoPassword} onChange={e => setInfoPassword(e.target.value)} style={inputStyle} placeholder="Confirme sua senha" />
                 </Field>
               )}
+              <Field label="Nome do Dashboard (opcional)">
+                <input
+                  value={dashboardName}
+                  onChange={e => setDashboardName(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Ex: Minha Empresa, Loja do João..."
+                  maxLength={60}
+                />
+                <p style={{ fontSize: 12, color: "#9992b8", marginTop: 5 }}>
+                  Aparece no menu lateral e na saudação do dashboard
+                </p>
+              </Field>
               <StatusBanner status={infoStatus} error={infoError} savedMsg="Dados atualizados com sucesso!" />
               <button type="submit" disabled={infoStatus === "saving"} style={{ ...btnPrimary, opacity: infoStatus === "saving" ? 0.7 : 1, display: "flex", alignItems: "center", gap: 8 }}>
                 {infoStatus === "saving" ? <><Icon name="spinner" size={13} spin /> Salvando...</> : "Salvar alterações"}
@@ -269,6 +438,8 @@ export default function Profile() {
   );
 }
 
+/* ── Sub-components ── */
+
 function Card({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ background: "#080810", border: "1px solid rgba(139,92,246,0.12)", borderRadius: 18, padding: 32 }}>
@@ -288,11 +459,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function EyeBtn({ show, toggle }: { show: boolean; toggle: () => void }) {
   return (
-    <button type="button" onClick={toggle} style={{
-      position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-      background: "none", border: "none", color: "#9992b8", cursor: "pointer",
-      display: "flex", alignItems: "center",
-    }}>
+    <button type="button" onClick={toggle} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#9992b8", cursor: "pointer", display: "flex", alignItems: "center" }}>
       <Icon name={show ? "eye-slash" : "eye"} size={16} color="#9992b8" />
     </button>
   );

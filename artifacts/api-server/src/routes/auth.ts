@@ -7,6 +7,14 @@ import { signToken, requireAuth, type AuthRequest } from "../middlewares/require
 const router = Router();
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const PUBLIC_FIELDS = {
+  id: usersTable.id,
+  name: usersTable.name,
+  email: usersTable.email,
+  avatar: usersTable.avatar,
+  dashboardName: usersTable.dashboardName,
+};
+
 router.post("/auth/register", async (req, res) => {
   const { name, email, password } = req.body;
   if (!name?.trim() || !email?.trim() || !password) {
@@ -25,7 +33,10 @@ router.post("/auth/register", async (req, res) => {
   const passwordHash = await bcrypt.hash(password, 10);
   const [user] = await db.insert(usersTable).values({ name: name.trim(), email: email.toLowerCase(), passwordHash }).returning();
   const token = signToken(user!.id);
-  res.status(201).json({ token, user: { id: user!.id, name: user!.name, email: user!.email } });
+  res.status(201).json({
+    token,
+    user: { id: user!.id, name: user!.name, email: user!.email, avatar: user!.avatar, dashboardName: user!.dashboardName },
+  });
 });
 
 router.post("/auth/login", async (req, res) => {
@@ -38,22 +49,40 @@ router.post("/auth/login", async (req, res) => {
     res.status(401).json({ error: "Email ou senha incorretos" }); return;
   }
   const token = signToken(user.id);
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  res.json({
+    token,
+    user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar, dashboardName: user.dashboardName },
+  });
 });
 
 router.get("/auth/me", requireAuth, async (req: AuthRequest, res) => {
-  const [user] = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
-    .from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
+  const [user] = await db.select(PUBLIC_FIELDS).from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
   if (!user) { res.status(404).json({ error: "Usuário não encontrado" }); return; }
   res.json(user);
 });
 
 router.put("/auth/profile", requireAuth, async (req: AuthRequest, res) => {
-  const { name, email, currentPassword, openaiApiKey } = req.body;
+  const { name, email, currentPassword, openaiApiKey, avatar, dashboardName } = req.body;
   const updates: Record<string, unknown> = {};
 
   if (name?.trim()) updates["name"] = name.trim();
   if (openaiApiKey !== undefined) updates["openaiApiKey"] = openaiApiKey?.trim() || null;
+
+  if (dashboardName !== undefined) {
+    updates["dashboardName"] = dashboardName?.trim() || null;
+  }
+
+  if (avatar !== undefined) {
+    if (avatar !== null && avatar !== "") {
+      if (typeof avatar !== "string" || !avatar.startsWith("data:image/")) {
+        res.status(400).json({ error: "Formato de imagem inválido" }); return;
+      }
+      if (Buffer.byteLength(avatar, "utf8") > 1.5 * 1024 * 1024) {
+        res.status(400).json({ error: "Imagem muito grande. Máximo 1.5 MB." }); return;
+      }
+    }
+    updates["avatar"] = avatar || null;
+  }
 
   if (email?.trim()) {
     if (!emailRegex.test(email)) {
@@ -82,7 +111,7 @@ router.put("/auth/profile", requireAuth, async (req: AuthRequest, res) => {
   const [user] = await db.update(usersTable).set(updates as any)
     .where(eq(usersTable.id, req.userId!)).returning();
   if (!user) { res.status(404).json({ error: "Usuário não encontrado" }); return; }
-  res.json({ id: user.id, name: user.name, email: user.email });
+  res.json({ id: user.id, name: user.name, email: user.email, avatar: user.avatar, dashboardName: user.dashboardName });
 });
 
 router.put("/auth/password", requireAuth, async (req: AuthRequest, res) => {

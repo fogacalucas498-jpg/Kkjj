@@ -1,32 +1,20 @@
+import { Icon, type IconName } from "./Icon";
+
 const BASE = import.meta.env.BASE_URL;
 
-const cards = [
+const cards: { iconName: IconName; title: string; desc: string }[] = [
   {
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <path d="M10 2L3 7v11h5v-5h4v5h5V7L10 2z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-      </svg>
-    ),
+    iconName: "user-circle",
     title: "Impulsione Satisfação e Fidelidade!",
     desc: "Impulsione a eficiência do seu time com agentes de I.A atendendo seus clientes diretamente no WhatsApp. Tire dúvidas e execute pré-vendas sem dores de cabeça.",
   },
   {
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.6"/>
-        <path d="M6 8h8M6 11h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-      </svg>
-    ),
+    iconName: "comments",
     title: "Controle Que Reflete Excelência",
     desc: "Crie robôs e utilize de instruções, documentos, perguntas frequentes e mais para criar um agente altamente personalizado.",
   },
   {
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.6"/>
-        <path d="M7 10l2 2 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
+    iconName: "lightbulb",
     title: "Embarque Conhecimento de Forma Simples",
     desc: "Conecte seus números do WhatsApp com agentes através de dispositivos diretamente pelo seu celular, totalmente em Cloud, sem instalar nada!",
   },
@@ -44,14 +32,16 @@ export default function PlatformSection() {
               <span>para agentes de I.A</span>
             </h2>
             <p className="section-sub">
-              Converza é uma plataforma focada na construção de agentes de I.A
+              Uma plataforma focada na construção de agentes de I.A
               que resolvem as dores do seu cliente e aumentam seus lucros.
             </p>
 
             <div className="platform-cards" style={{ marginTop: 40 }}>
               {cards.map((c) => (
                 <div key={c.title} className="platform-card">
-                  <div className="platform-card-icon">{c.icon}</div>
+                  <div className="platform-card-icon">
+                    <Icon name={c.iconName} size={20} color="#8b5cf6" />
+                  </div>
                   <h3>{c.title}</h3>
                   <p>{c.desc}</p>
                 </div>

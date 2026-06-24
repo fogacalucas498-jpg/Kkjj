@@ -1,3 +1,5 @@
+import { Icon } from "./Icon";
+
 const BASE = import.meta.env.BASE_URL;
 
 export default function Security() {
@@ -6,7 +8,9 @@ export default function Security() {
       <div className="container">
         <div className="security-grid">
           <div className="security-content">
-            <div className="security-icon">🔒</div>
+            <div className="security-icon">
+              <Icon name="lock" size={36} color="#8b5cf6" />
+            </div>
             <div className="section-tag">✦ Segurança</div>
             <h2 className="section-title">
               Sem Deixar<br /><span>Dúvidas</span>

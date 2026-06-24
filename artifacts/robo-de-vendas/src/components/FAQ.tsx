@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "./Icon";
 
 const faqs = [
   {
@@ -49,7 +50,13 @@ export default function FAQ() {
               <div key={i} className={`faq-item${open === i ? " open" : ""}`}>
                 <button className="faq-question" onClick={() => setOpen(open === i ? null : i)}>
                   {f.q}
-                  <span className="faq-icon">+</span>
+                  <span className="faq-icon">
+                    <Icon
+                      name={open === i ? "xmark" : "plus"}
+                      size={14}
+                      color={open === i ? "#8b5cf6" : "currentColor"}
+                    />
+                  </span>
                 </button>
                 <div className={`faq-answer${open === i ? " open" : ""}`}>
                   {f.a}

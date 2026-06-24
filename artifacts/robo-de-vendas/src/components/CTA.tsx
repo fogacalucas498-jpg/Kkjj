@@ -1,3 +1,5 @@
+import { Icon } from "./Icon";
+
 const BASE = import.meta.env.BASE_URL;
 
 function navigate(path: string) {
@@ -18,7 +20,12 @@ export default function CTA() {
             Robô de Vendas - Networking VIP, sem precisar de cartão de crédito.
             É 100% gratuito.
           </p>
-          <button className="btn-primary btn-large" onClick={() => navigate("/register")}>
+          <button
+            className="btn-primary btn-large"
+            onClick={() => navigate("/register")}
+            style={{ display: "inline-flex", alignItems: "center", gap: 10 }}
+          >
+            <Icon name="whatsapp" size={18} color="#fff" />
             Começar Agora — É Grátis
           </button>
         </div>

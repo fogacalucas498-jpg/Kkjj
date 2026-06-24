@@ -1,3 +1,5 @@
+import { Icon } from "./Icon";
+
 const BASE = import.meta.env.BASE_URL;
 
 function navigate(path: string) {
@@ -24,11 +26,25 @@ export default function Hero() {
         </p>
 
         <div className="hero-actions">
-          <button className="btn-primary btn-large" onClick={() => navigate("/register")}>Cadastre-se Agora</button>
-          <button className="btn-ghost btn-large" onClick={() => navigate("/register")}>Entrar na Lista</button>
+          <button className="btn-primary btn-large" onClick={() => navigate("/register")}
+            style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <Icon name="robot" size={16} color="#fff" />
+            Cadastre-se Agora
+          </button>
+          <button className="btn-ghost btn-large" onClick={() => navigate("/register")}
+            style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <Icon name="star" size={14} color="currentColor" />
+            Entrar na Lista
+          </button>
         </div>
 
-        <p className="hero-note">✓ Sem cartão de crédito &nbsp;·&nbsp; ✓ Grátis para sempre &nbsp;·&nbsp; ✓ Comece em minutos</p>
+        <p className="hero-note">
+          <Icon name="circle-check" size={13} color="#a78bfa" /> Sem cartão de crédito
+          &nbsp;·&nbsp;
+          <Icon name="circle-check" size={13} color="#a78bfa" /> Grátis para sempre
+          &nbsp;·&nbsp;
+          <Icon name="circle-check" size={13} color="#a78bfa" /> Comece em minutos
+        </p>
 
         <div className="hero-img-wrap">
           <img

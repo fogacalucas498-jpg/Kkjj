@@ -1,15 +1,9 @@
+import { Icon } from "./Icon";
+
 const BASE = import.meta.env.BASE_URL;
 
 function navigate(path: string) {
   window.location.href = BASE.endsWith("/") ? `${BASE}${path.replace(/^\//, "")}` : `${BASE}${path}`;
-}
-
-function CheckIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-      <path d="M1.5 5L4 7.5L8.5 2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
 }
 
 const plans = [
@@ -77,14 +71,19 @@ export default function Pricing() {
               <div className="pricing-price">
                 <span className="price-amount">GRÁTIS</span>
               </div>
-              <div className="pricing-free-badge">100% Gratuito</div>
+              <div className="pricing-free-badge">
+                <Icon name="star" size={11} color="#8b5cf6" style={{ marginRight: 5 }} />
+                100% Gratuito
+              </div>
 
               <div className="pricing-divider" />
 
               <div className="pricing-features">
                 {plan.features.map((f) => (
                   <div key={f} className="pricing-feature">
-                    <div className="feature-check"><CheckIcon /></div>
+                    <div className="feature-check">
+                      <Icon name="check" size={10} color="currentColor" />
+                    </div>
                     {f}
                   </div>
                 ))}
@@ -93,7 +92,9 @@ export default function Pricing() {
               <button
                 className={plan.featured ? "btn-plan btn-plan-primary" : "btn-plan btn-plan-ghost"}
                 onClick={() => navigate("/register")}
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}
               >
+                <Icon name="bolt" size={13} color="currentColor" />
                 Começar Agora
               </button>
             </div>
