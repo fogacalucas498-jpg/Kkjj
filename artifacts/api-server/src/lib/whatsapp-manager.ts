@@ -33,6 +33,41 @@ interface SessionState {
   reconnectAttempts: number;
 }
 
+// ─── Baileys-compatible logger that surfaces warnings/errors via pino ────────
+// Suppresses noisy trace/debug/info but lets errors/warnings through so we
+// can see WhatsApp rejections (403, 401, etc.) in server logs.
+function makeBaileysLogger(agentId: number) {
+  const noop = () => {};
+  return {
+    level: "warn",
+    trace: noop,
+    debug: noop,
+    info: noop,
+    warn(obj: any, msg?: string) {
+      if (typeof obj === "string") {
+        logger.warn({ agentId, baileys: true }, obj);
+      } else {
+        logger.warn({ agentId, baileys: true, ...obj }, msg ?? "");
+      }
+    },
+    error(obj: any, msg?: string) {
+      if (typeof obj === "string") {
+        logger.error({ agentId, baileys: true }, obj);
+      } else {
+        logger.error({ agentId, baileys: true, ...obj }, msg ?? "");
+      }
+    },
+    fatal(obj: any, msg?: string) {
+      if (typeof obj === "string") {
+        logger.error({ agentId, baileys: true, fatal: true }, obj);
+      } else {
+        logger.error({ agentId, baileys: true, fatal: true, ...obj }, msg ?? "");
+      }
+    },
+    child() { return this; },
+  };
+}
+
 class WhatsAppManager extends EventEmitter {
   private sessions = new Map<number, SessionState>();
 
@@ -93,41 +128,79 @@ class WhatsAppManager extends EventEmitter {
   }
 
   // ─── Connect ─────────────────────────────────────────────────────────────
-  async connect(agentId: number) {
+  // force=true bypasses the guard so the user can force a fresh QR
+  async connect(agentId: number, force = false) {
     const existing = this.sessions.get(agentId);
-    if (
-      existing?.status === "connected" ||
-      existing?.status === "connecting" ||
-      existing?.status === "qr"
-    ) return;
+
+    if (!force) {
+      if (
+        existing?.status === "connected" ||
+        existing?.status === "connecting" ||
+        existing?.status === "qr"
+      ) {
+        logger.info({ agentId, existingStatus: existing?.status }, "connect() skipped — session already active");
+        return;
+      }
+    } else {
+      // Force: tear down existing socket cleanly before starting fresh
+      if (existing?.sock) {
+        try { existing.sock.end(undefined); } catch {}
+      }
+      this.sessions.delete(agentId);
+      logger.info({ agentId }, "connect() forced — tearing down existing session");
+    }
 
     const reconnectAttempts = existing?.reconnectAttempts ?? 0;
     const sessionState: SessionState = { status: "connecting", reconnectAttempts };
     this.sessions.set(agentId, sessionState);
 
+    logger.info({ agentId, reconnectAttempts }, "WhatsApp connect() starting");
+
     try {
       const baileys = (await import("@whiskeysockets/baileys")) as any;
-      const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = baileys;
+      const {
+        default: makeWASocket,
+        useMultiFileAuthState,
+        DisconnectReason,
+        fetchLatestBaileysVersion,
+        Browsers,
+        makeCacheableSignalKeyStore,
+      } = baileys;
 
       const authDir = path.join(SESSIONS_DIR, String(agentId));
       fs.mkdirSync(authDir, { recursive: true });
 
       const { state, saveCreds } = await useMultiFileAuthState(authDir);
-      const { version } = await fetchLatestBaileysVersion();
 
-      // Browsers.ubuntu("Chrome") is the recommended fingerprint — works on iOS and Android
+      logger.info({ agentId, hasMe: !!state?.creds?.me }, "Auth state loaded");
+
+      // ── Get WA version with fallback ──────────────────────────────────────
+      let version: number[];
+      try {
+        const result = await fetchLatestBaileysVersion();
+        version = result.version;
+        logger.info({ agentId, version: version.join(".") }, "WA version fetched");
+      } catch (vErr) {
+        // Fallback to last known-good version
+        version = [2, 3000, 1035194821];
+        logger.warn({ agentId, err: vErr }, "fetchLatestBaileysVersion failed — using fallback version");
+      }
+
       const browserConfig =
-        typeof Browsers?.ubuntu === "function" ? Browsers.ubuntu("Chrome") : ["Ubuntu", "Chrome", "20.0.04"];
+        typeof Browsers?.ubuntu === "function"
+          ? Browsers.ubuntu("Chrome")
+          : ["Ubuntu", "Chrome", "22.04.4"];
 
-      const silentLogger = {
-        level: "silent",
-        info() {}, warn() {}, error() {}, debug() {}, trace() {}, fatal() {},
-        child() { return this; },
-      };
+      const baileysLogger = makeBaileysLogger(agentId);
+
+      // Build auth — in v7, keys may need to be wrapped with makeCacheableSignalKeyStore
+      const authState = (typeof makeCacheableSignalKeyStore === "function" && state?.keys)
+        ? { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, baileysLogger) }
+        : state;
 
       const sock = makeWASocket({
         version,
-        auth: state,
+        auth: authState,
         browser: browserConfig,
         printQRInTerminal: false,
         syncFullHistory: false,
@@ -136,8 +209,10 @@ class WhatsAppManager extends EventEmitter {
         keepAliveIntervalMs: 25_000,
         retryRequestDelayMs: 500,
         generateHighQualityLinkPreview: false,
-        logger: silentLogger,
+        logger: baileysLogger,
       });
+
+      logger.info({ agentId }, "makeWASocket instance created — waiting for QR / connection");
 
       sessionState.sock = sock;
       this.sessions.set(agentId, sessionState);
@@ -147,6 +222,8 @@ class WhatsAppManager extends EventEmitter {
       // ── Connection lifecycle ───────────────────────────────────────────
       sock.ev.on("connection.update", async (update: any) => {
         const { connection, lastDisconnect, qr } = update;
+
+        logger.info({ agentId, connection, hasQr: !!qr, lastDisconnectCode: (lastDisconnect?.error as any)?.output?.statusCode }, "connection.update");
 
         if (qr) {
           try {
@@ -160,6 +237,7 @@ class WhatsAppManager extends EventEmitter {
               .set({ status: "qr", qrCode: qrDataURL, updatedAt: new Date() })
               .where(eq(whatsappSessionsTable.agentId, agentId))
               .catch(() => {});
+            logger.info({ agentId }, "QR code generated — waiting for scan");
           } catch (err) {
             logger.error({ err, agentId }, "QR code generation failed");
           }
@@ -170,7 +248,8 @@ class WhatsAppManager extends EventEmitter {
           const isLoggedOut =
             statusCode === DisconnectReason.loggedOut ||
             statusCode === DisconnectReason.forbidden ||
-            statusCode === 401;
+            statusCode === 401 ||
+            statusCode === 403;
 
           logger.info({ agentId, statusCode, isLoggedOut }, "WhatsApp connection closed");
 
@@ -190,12 +269,11 @@ class WhatsAppManager extends EventEmitter {
             const authDir2 = path.join(SESSIONS_DIR, String(agentId));
             try { fs.rmSync(authDir2, { recursive: true, force: true }); } catch {}
             this.sessions.delete(agentId);
-            logger.info({ agentId }, "Logged out — credentials cleared");
+            logger.info({ agentId, statusCode }, "Logged out / forbidden — credentials cleared");
             return;
           }
 
           // Exponential backoff: 5s → 7.5s → 11s → 17s → 25s → 30s max
-          // Use sessionState.reconnectAttempts (which resets to 0 on success)
           const curAttempts = sessionState.reconnectAttempts;
           const nextAttempts = curAttempts + 1;
           const delay = Math.min(5_000 * Math.pow(1.5, Math.min(curAttempts, 5)), 30_000);
@@ -205,7 +283,6 @@ class WhatsAppManager extends EventEmitter {
             const s = this.sessions.get(agentId);
             if (!s || s.status === "disconnected") {
               this.sessions.delete(agentId);
-              // Seed reconnectAttempts so next connect grows the backoff
               this.sessions.set(agentId, { status: "disconnected", reconnectAttempts: nextAttempts });
               this.connect(agentId).catch(() => {});
             }
@@ -226,7 +303,7 @@ class WhatsAppManager extends EventEmitter {
             .where(eq(whatsappSessionsTable.agentId, agentId))
             .catch(() => {});
 
-          logger.info({ agentId, phone }, "WhatsApp connected");
+          logger.info({ agentId, phone }, "WhatsApp connected successfully");
         }
       });
 
@@ -262,6 +339,8 @@ class WhatsAppManager extends EventEmitter {
 
     const jid: string = msg.key.remoteJid ?? "";
     if (!jid || jid.endsWith("@g.us") || jid === "status@broadcast") return;
+
+    logger.info({ agentId, jid: jid.split("@")[0] }, "Incoming message from contact");
 
     // ── Resolve agent & API key first (needed for audio transcription too) ──
     const [agentRow] = await db
@@ -322,6 +401,8 @@ class WhatsAppManager extends EventEmitter {
 
     const contactPhone = jid.replace("@s.whatsapp.net", "");
     const contactName: string = (msg.pushName as string | undefined) ?? contactPhone;
+
+    logger.info({ agentId, contactPhone, textLen: text.length, isAudio }, "Processing message for AI reply");
 
     // ── Session row ──
     const [session] = await db
@@ -385,6 +466,7 @@ class WhatsAppManager extends EventEmitter {
     // ── Send WhatsApp message ──
     try {
       await sock.sendMessage(jid, { text: aiReply });
+      logger.info({ agentId, convId: conv.id, jid: jid.split("@")[0] }, "AI reply sent");
     } catch (err) {
       logger.error({ err, agentId, jid }, "Failed to send WhatsApp message");
       return;
@@ -396,6 +478,11 @@ class WhatsAppManager extends EventEmitter {
       .update(conversationsTable)
       .set({ lastMessage: aiReply, lastMessageAt: new Date() })
       .where(eq(conversationsTable.id, conv.id));
+  }
+
+  // ─── Force reconnect (public — used by route when user explicitly clicks Connect) ──
+  async forceConnect(agentId: number) {
+    return this.connect(agentId, true);
   }
 
   // ─── Disconnect ──────────────────────────────────────────────────────────
@@ -417,23 +504,17 @@ class WhatsAppManager extends EventEmitter {
   }
 
   // ─── Transcribe audio with OpenAI Whisper ───────────────────────────────
-  // Whisper supports: mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm
-  // WhatsApp sends PTT and audio as OGG/OPUS — works natively.
-  // No language param → Whisper auto-detects (enables multi-language).
   private async transcribeAudio(sock: any, msg: any, apiKey: string): Promise<string | null> {
     try {
-      const { downloadMediaMessage } = (await import("@whiskeysockets/baileys")) as any;
-      const silentLogger = {
-        level: "silent",
-        info() {}, warn() {}, error() {}, debug() {}, trace() {}, fatal() {},
-        child() { return this; },
-      };
+      const baileys = (await import("@whiskeysockets/baileys")) as any;
+      const { downloadMediaMessage } = baileys;
+      const baileysLogger = makeBaileysLogger(0);
 
       const audioBuffer: Buffer = await downloadMediaMessage(
         msg,
         "buffer",
         {},
-        { logger: silentLogger, reuploadRequest: sock.updateMediaMessage }
+        { logger: baileysLogger, reuploadRequest: sock.updateMediaMessage }
       );
 
       if (!audioBuffer || audioBuffer.length === 0) {
@@ -444,12 +525,10 @@ class WhatsAppManager extends EventEmitter {
       const { default: OpenAI, toFile } = (await import("openai")) as any;
       const client = new OpenAI({ apiKey });
 
-      // Do NOT specify language → Whisper auto-detects for multi-language support
       const audioFile = await toFile(audioBuffer, "audio.ogg", { type: "audio/ogg" });
       const transcription = await client.audio.transcriptions.create({
         model: "whisper-1",
         file: audioFile,
-        // language: omitted intentionally — auto-detect
       });
 
       const text: string = transcription.text?.trim() ?? "";
@@ -470,7 +549,6 @@ class WhatsAppManager extends EventEmitter {
     apiKey: string,
   ): Promise<string | null> {
     try {
-      // Knowledge base
       const knowledge = await db
         .select({ title: knowledgeTable.title, content: knowledgeTable.content })
         .from(knowledgeTable)
@@ -478,29 +556,22 @@ class WhatsAppManager extends EventEmitter {
 
       const knowledgeText = knowledge.map(k => `### ${k.title}\n${k.content}`).join("\n\n");
 
-      // Conversation history — ordered chronologically; user message already saved
       const history = await db
         .select({ role: messagesTable.role, content: messagesTable.content })
         .from(messagesTable)
         .where(eq(messagesTable.conversationId, convId))
         .orderBy(messagesTable.createdAt);
 
-      // Use last 20 messages for context (10 user + 10 assistant turns)
       const last20 = history.slice(-20);
 
-      // Base instructions: use agent's custom instructions or a neutral default
       const baseInstructions =
         agent.instructions?.trim() ||
         `Você é ${agent.name}, um assistente virtual inteligente e prestativo. Seja educado, claro e objetivo.`;
 
-      // Build system prompt
       let systemPrompt = baseInstructions;
       if (knowledgeText) {
         systemPrompt += `\n\n## Base de Conhecimento\nUse as informações abaixo para responder. Priorize estas informações.\n\n${knowledgeText}`;
       }
-
-      // ── Multi-language directive — always appended ──
-      // GPT reliably follows this regardless of the rest of the prompt language.
       systemPrompt += LANGUAGE_DIRECTIVE;
 
       const { default: OpenAI } = (await import("openai")) as any;
@@ -510,8 +581,6 @@ class WhatsAppManager extends EventEmitter {
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
-          // History already includes the latest user message (saved before this call)
-          // Do NOT append userMessage again — that would duplicate it in the context.
           ...last20.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
         ],
         max_tokens: 600,
